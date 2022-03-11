@@ -1,0 +1,28 @@
+{
+  "strategy_name": "AverageStrategy",
+  "params": {
+    "buy": {
+      "buy_range_long": 21,
+      "buy_range_short": 8
+    },
+    "sell": {},
+    "protection": {},
+    "roi": {
+      "0": 0.105,
+      "28": 0.028999999999999998,
+      "46": 0.01,
+      "138": 0
+    },
+    "stoploss": {
+      "stoploss": -0.063
+    },
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.235,
+      "trailing_stop_positive_offset": 0.33299999999999996,
+      "trailing_only_offset_is_reached": false
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2022-03-11 07:11:43.711930+00:00"
+}
