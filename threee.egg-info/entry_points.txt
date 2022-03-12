@@ -1,2 +1,0 @@
-[console_scripts]
-threee = threee.main:main
