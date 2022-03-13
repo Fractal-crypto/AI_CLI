@@ -7,12 +7,10 @@ logger = logging.getLogger(__name__)
 
 def start_trading(args: Dict[str, Any]) -> int:
     """
-    Main entry point for trading mode
+    트레이딩 명령
     """
-    # Import here to avoid loading worker module when it's not used
-    from threee.worker import Worker
 
-    # Create and run worker
+    from threee.worker import Worker #워커실행
     worker = None
     try:
         worker = Worker(args)

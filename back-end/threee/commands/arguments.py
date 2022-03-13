@@ -146,27 +146,20 @@ class Arguments:
 
         self.parser = argparse.ArgumentParser(description='hello this is TUK')
 
-
         from threee.commands import (start_backtesting, start_backtesting_show,
                                         start_convert_data, start_convert_trades,
-                                        start_create_userdir, start_download_data, start_edge,
-                                        start_hyperopt, start_hyperopt_list, start_hyperopt_show,
-                                        start_install_ui, start_list_data, start_list_exchanges,
-                                        start_list_markets, start_list_strategies,
-                                        start_list_timeframes, start_new_strategy,
-                                         start_show_trades,
-                                        start_test_pairlist, start_trading, start_webserver)
+                                         start_download_data, 
+                                        start_hyperopt,
+                                         start_list_data,
+                                         start_trading)
 
-        subparsers = self.parser.add_subparsers(dest='command',
-
-                                                )
+        subparsers = self.parser.add_subparsers(dest='command')
 
         # 트레이드 시작
         trade_cmd = subparsers.add_parser('trade', help='Trade module.',
                                           parents=[_common_parser, _strategy_parser])
         trade_cmd.set_defaults(func=start_trading)
         self._build_args(optionlist=ARGS_TRADE, parser=trade_cmd)
-
 
         # 데이터 다운로드
         download_data_cmd = subparsers.add_parser(
@@ -177,13 +170,11 @@ class Arguments:
         download_data_cmd.set_defaults(func=start_download_data)
         self._build_args(optionlist=ARGS_DOWNLOAD_DATA, parser=download_data_cmd)
 
-
         # 백테스팅
         backtesting_cmd = subparsers.add_parser('backtesting', help='Backtesting module.',
                                                 parents=[_common_parser, _strategy_parser])
         backtesting_cmd.set_defaults(func=start_backtesting)
         self._build_args(optionlist=ARGS_BACKTEST, parser=backtesting_cmd)
-
 
         # 베이지안 옵티마져
         hyperopt_cmd = subparsers.add_parser('hyperopt', help='Hyperopt module.',

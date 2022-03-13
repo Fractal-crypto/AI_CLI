@@ -1,6 +1,3 @@
-"""
-This module contains the argument manager class
-"""
 import logging
 import re
 from datetime import datetime
@@ -10,15 +7,9 @@ import arrow
 
 from threee.exceptions import OperationalException
 
-
-logger = logging.getLogger(__name__)
-
-
 class TimeRange:
     """
-    object defining timerange inputs.
-    [start/stop]type defines if [start/stop]ts shall be used.
-    if *type is None, don't use corresponding startvalue.
+    데이터 분석 기간 지정
     """
 
     def __init__(self, starttype: Optional[str] = None, stoptype: Optional[str] = None,
@@ -30,15 +21,13 @@ class TimeRange:
         self.stopts: int = stopts
 
     def __eq__(self, other):
-        """Override the default Equals behavior"""
+        #오버라이드 형식
         return (self.starttype == other.starttype and self.stoptype == other.stoptype
                 and self.startts == other.startts and self.stopts == other.stopts)
 
     def subtract_start(self, seconds: int) -> None:
         """
-        Subtracts <seconds> from startts if startts is set.
-        :param seconds: Seconds to subtract from starttime
-        :return: None (Modifies the object in place)
+        데이터 학습기간 두번째 값을 통해 자르기
         """
         if self.startts:
             self.startts = self.startts - seconds
@@ -46,28 +35,18 @@ class TimeRange:
     def adjust_start_if_necessary(self, timeframe_secs: int, startup_candles: int,
                                   min_date: datetime) -> None:
         """
-        Adjust startts by <startup_candles> candles.
-        Applies only if no startup-candles have been available.
-        :param timeframe_secs: Timeframe in seconds e.g. `timeframe_to_seconds('5m')`
-        :param startup_candles: Number of candles to move start-date forward
-        :param min_date: Minimum data date loaded. Key kriterium to decide if start-time
-                         has to be moved
-        :return: None (Modifies the object in place)
+        데이터 학습 기간과 타임프레임 시간을 재지정 바람
         """
         if (not self.starttype or (startup_candles
                                    and min_date.timestamp() >= self.startts)):
-            # If no startts was defined, or backtest-data starts at the defined backtest-date
-            logger.warning("Moving start-date by %s candles to account for startup time.",
-                           startup_candles)
+            # 기간 지정안해주면 지정된 자동 기간 학습
             self.startts = int(min_date.timestamp() + timeframe_secs * startup_candles)
             self.starttype = 'date'
 
     @staticmethod
     def parse_timerange(text: Optional[str]) -> 'TimeRange':
         """
-        Parse the value of the argument --timerange to determine what is the range desired
-        :param text: value from --timerange
-        :return: Start and End range period
+        커멘드에 넣을 기간 지정 예) 20220303-20230303
         """
         if text is None:
             return TimeRange(None, None, 0, 0)
@@ -82,9 +61,9 @@ class TimeRange:
                   (r'^(\d{13})-(\d{13})$', ('date', 'date')),
                   ]
         for rex, stype in syntax:
-            # Apply the regular expression to text
+
             match = re.match(rex, text)
-            if match:  # Regex has matched
+            if match:
                 rvals = match.groups()
                 index = 0
                 start: int = 0
@@ -107,7 +86,6 @@ class TimeRange:
                     else:
                         stop = int(stops)
                 if start > stop > 0:
-                    raise OperationalException(
-                        f'Start date is after stop date for timerange "{text}"')
+                    raise OperationalException("시작 기간이 끝나는 시간 변경")
                 return TimeRange(stype[0], stype[1], start, stop)
-        raise OperationalException(f'Incorrect syntax for timerange "{text}"')
+        raise OperationalException("형식이 다릅니다")

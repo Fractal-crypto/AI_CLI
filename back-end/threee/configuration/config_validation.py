@@ -10,13 +10,9 @@ from threee.enums import RunMode
 from threee.exceptions import OperationalException
 
 
-logger = logging.getLogger(__name__)
-
-
 def _extend_validator(validator_class):
     """
-    Extended validator for the Freqtrade configuration JSON Schema.
-    Currently it only handles defaults for subschemas.
+    json 스키마 이용해서  config.json 데이터 검증
     """
     validate_properties = validator_class.VALIDATORS['properties']
 
@@ -31,18 +27,13 @@ def _extend_validator(validator_class):
             yield error
 
     return validators.extend(
-        validator_class, {'properties': set_defaults}
-    )
+        validator_class, {'properties': set_defaults})
 
-
-FreqtradeValidator = _extend_validator(Draft4Validator)
-
+threee = _extend_validator(Draft4Validator)
 
 def validate_config_schema(conf: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Validate the configuration follow the Config Schema
-    :param conf: Config in JSON format
-    :return: Returns the config if valid, otherwise throw an exception
+    지속적으로 실행전 config파일에서 정보 확인
     """
     conf_schema = deepcopy(constants.CONF_SCHEMA)
     if conf.get('runmode', RunMode.OTHER) in (RunMode.DRY_RUN, RunMode.LIVE):
@@ -52,27 +43,17 @@ def validate_config_schema(conf: Dict[str, Any]) -> Dict[str, Any]:
     else:
         conf_schema['required'] = constants.SCHEMA_MINIMAL_REQUIRED
     try:
-        FreqtradeValidator(conf_schema).validate(conf)
+        threee(conf_schema).validate(conf)
         return conf
     except ValidationError as e:
-        logger.critical(
-            f"Invalid configuration. Reason: {e}"
-        )
-        raise ValidationError(
-            best_match(Draft4Validator(conf_schema).iter_errors(conf)).message
-        )
 
+        raise ValidationError('config 오류')
 
 def validate_config_consistency(conf: Dict[str, Any]) -> None:
     """
-    Validate the configuration consistency.
-    Should be ran after loading both configuration and strategy,
-    since strategies can set certain configuration settings too.
-    :param conf: Config in JSON format
-    :return: Returns None if everything is ok, otherwise throw an OperationalException
+    실행시킬때마다 각 함수들 정보 불러오
     """
 
-    # validating trailing stoploss
     _validate_trailing_stoploss(conf)
     _validate_price_config(conf)
     _validate_edge(conf)
@@ -80,43 +61,36 @@ def validate_config_consistency(conf: Dict[str, Any]) -> None:
     _validate_protections(conf)
     _validate_unlimited_amount(conf)
     _validate_ask_orderbook(conf)
-
-    # validate configuration before returning
-    logger.info('Validating configuration ...')
     validate_config_schema(conf)
 
 
 def _validate_unlimited_amount(conf: Dict[str, Any]) -> None:
     """
-    If edge is disabled, either max_open_trades or stake_amount need to be set.
-    :raise: OperationalException if config validation failed
+    종목수랑 매매 거래량 재지정
     """
     if (not conf.get('edge', {}).get('enabled')
        and conf.get('max_open_trades') == float('inf')
        and conf.get('stake_amount') == constants.UNLIMITED_STAKE_AMOUNT):
-        raise OperationalException("`max_open_trades` and `stake_amount` cannot both be unlimited.")
-
+        raise OperationalException('종목수 다시 지정')
 
 def _validate_price_config(conf: Dict[str, Any]) -> None:
     """
-    When using market orders, price sides must be using the "other" side of the price
+    시장가 매수 할때 각 종목의 주문을 넣는 방향
     """
     if (conf.get('order_types', {}).get('buy') == 'market'
             and conf.get('bid_strategy', {}).get('price_side') != 'ask'):
-        raise OperationalException('Market buy orders require bid_strategy.price_side = "ask".')
+        raise OperationalException('ask로 수정')
 
     if (conf.get('order_types', {}).get('sell') == 'market'
             and conf.get('ask_strategy', {}).get('price_side') != 'bid'):
-        raise OperationalException('Market sell orders require ask_strategy.price_side = "bid".')
+        raise OperationalException('bid로 수')
 
 
 def _validate_trailing_stoploss(conf: Dict[str, Any]) -> None:
 
     if conf.get('stoploss') == 0.0:
-        raise OperationalException(
-            'The config stoploss needs to be different from 0 to avoid problems with sell orders.'
+        raise OperationalException("종목이 일정이상 올라가면 손실률 측정과 기본 설정값이 너무 높습니"
         )
-    # Skip if trailing stoploss is not activated
     if not conf.get('trailing_stop', False):
         return
 
@@ -126,67 +100,46 @@ def _validate_trailing_stoploss(conf: Dict[str, Any]) -> None:
 
     if tsl_only_offset:
         if tsl_positive == 0.0:
-            raise OperationalException(
-                'The config trailing_only_offset_is_reached needs '
-                'trailing_stop_positive_offset to be more than 0 in your config.')
+            raise OperationalException("0보다 높은 값을 필요")
     if tsl_positive > 0 and 0 < tsl_offset <= tsl_positive:
-        raise OperationalException(
-            'The config trailing_stop_positive_offset needs '
-            'to be greater than trailing_stop_positive in your config.')
-
-    # Fetch again without default
+        raise OperationalException("config 파일과 실제 loss값이 음수입니다")
     if 'trailing_stop_positive' in conf and float(conf['trailing_stop_positive']) == 0.0:
-        raise OperationalException(
-            'The config trailing_stop_positive needs to be different from 0 '
-            'to avoid problems with sell orders.'
-        )
+        raise OperationalException('0보다 높은 값을 필요')
 
 
 def _validate_edge(conf: Dict[str, Any]) -> None:
     """
-    Edge and Dynamic whitelist should not both be enabled, since edge overrides dynamic whitelists.
+    edge 기능 동시작동 불가
     """
-
     if not conf.get('edge', {}).get('enabled'):
         return
-
     if not conf.get('use_sell_signal', True):
-        raise OperationalException(
-            "Edge requires `use_sell_signal` to be True, otherwise no sells will happen."
-        )
+        raise OperationalException("Sell 기능 필요")
 
 
 def _validate_whitelist(conf: Dict[str, Any]) -> None:
     """
-    Dynamic whitelist does not require pair_whitelist to be set - however StaticWhitelist does.
+    config파일에서 종목 정보
     """
     if conf.get('runmode', RunMode.OTHER) in [RunMode.OTHER, RunMode.PLOT,
                                               RunMode.UTIL_NO_EXCHANGE, RunMode.UTIL_EXCHANGE]:
         return
-
     for pl in conf.get('pairlists', [{'method': 'StaticPairList'}]):
         if (pl.get('method') == 'StaticPairList'
                 and not conf.get('exchange', {}).get('pair_whitelist')):
-            raise OperationalException("StaticPairList requires pair_whitelist to be set.")
-
+            raise OperationalException("종목을 추가해주세요")
 
 def _validate_protections(conf: Dict[str, Any]) -> None:
     """
-    Validate protection configuration validity
+    데이터 정보 오류시 확인
     """
 
     for prot in conf.get('protections', []):
         if ('stop_duration' in prot and 'stop_duration_candles' in prot):
-            raise OperationalException(
-                "Protections must specify either `stop_duration` or `stop_duration_candles`.\n"
-                f"Please fix the protection {prot.get('method')}"
-            )
+            raise OperationalException('켄들데이터 오류')
 
         if ('lookback_period' in prot and 'lookback_period_candles' in prot):
-            raise OperationalException(
-                "Protections must specify either `lookback_period` or `lookback_period_candles`.\n"
-                f"Please fix the protection {prot.get('method')}"
-            )
+            raise OperationalException("켄들데이터 오류")
 
 
 def _validate_ask_orderbook(conf: Dict[str, Any]) -> None:
@@ -195,15 +148,7 @@ def _validate_ask_orderbook(conf: Dict[str, Any]) -> None:
     ob_max = ask_strategy.get('order_book_max')
     if ob_min is not None and ob_max is not None and ask_strategy.get('use_order_book'):
         if ob_min != ob_max:
-            raise OperationalException(
-                "Using order_book_max != order_book_min in ask_strategy is no longer supported."
-                "Please pick one value and use `order_book_top` in the future."
+            raise OperationalException("지정가 주문 지원하지 않습니다"
             )
         else:
-            # Move value to order_book_top
-            ask_strategy['order_book_top'] = ob_min
-            logger.warning(
-                "DEPRECATED: "
-                "Please use `order_book_top` instead of `order_book_min` and `order_book_max` "
-                "for your `ask_strategy` configuration."
-            )
+            None

@@ -8,15 +8,9 @@ from threee.exceptions import OperationalException
 from threee.misc import round_coin_value
 
 
-logger = logging.getLogger(__name__)
-
-
 def setup_optimize_configuration(args: Dict[str, Any], method: RunMode) -> Dict[str, Any]:
     """
-    Prepare the configuration for the Hyperopt module
-    :param args: Cli args from Arguments()
-    :param method: Bot running mode
-    :return: Configuration
+    베이지안 최적화 위해 config파일 기본 설정
     """
     config = setup_utils_configuration(args, method)
 
@@ -26,43 +20,31 @@ def setup_optimize_configuration(args: Dict[str, Any], method: RunMode) -> Dict[
     }
     if method in no_unlimited_runmodes.keys():
         wallet_size = config['dry_run_wallet'] * config['tradable_balance_ratio']
-        # tradable_balance_ratio
+
         if (config['stake_amount'] != constants.UNLIMITED_STAKE_AMOUNT
                 and config['stake_amount'] > wallet_size):
             wallet = round_coin_value(wallet_size, config['stake_currency'])
             stake = round_coin_value(config['stake_amount'], config['stake_currency'])
-            raise OperationalException(
-                f"Starting balance ({wallet}) is smaller than stake_amount {stake}. "
-                f"Wallet is calculated as `dry_run_wallet * tradable_balance_ratio`."
-                )
+            raise OperationalException("...")
 
     return config
 
 
 def start_backtesting(args: Dict[str, Any]) -> None:
     """
-    Start Backtesting script
-    :param args: Cli args from Arguments()
-    :return: None
+    백테스팅 시작
     """
-    # Import here to avoid loading backtesting module when it's not used
     from threee.optimize.backtesting import Backtesting
 
-    # Initialize configuration
     config = setup_optimize_configuration(args, RunMode.BACKTEST)
-
-    logger.info('Starting threee in Backtesting mode')
-
-    # Initialize backtesting object
     backtesting = Backtesting(config)
     backtesting.start()
 
 
 def start_backtesting_show(args: Dict[str, Any]) -> None:
     """
-    Show previous backtest result
+    백테스팅 데이터 불러오기
     """
-
     config = setup_utils_configuration(args, RunMode.UTIL_NO_EXCHANGE)
 
     from threee.data.btanalysis import load_backtest_stats
@@ -76,59 +58,24 @@ def start_backtesting_show(args: Dict[str, Any]) -> None:
 
 def start_hyperopt(args: Dict[str, Any]) -> None:
     """
-    Start hyperopt script
-    :param args: Cli args from Arguments()
-    :return: None
+    베이지안 최적화 커멘드 실행 함수
     """
-    # Import here to avoid loading hyperopt module when it's not used
     try:
         from filelock import FileLock, Timeout
 
         from threee.optimize.hyperopt import Hyperopt
     except ImportError as e:
-        raise OperationalException(
-            f"{e}. Please ensure that the hyperopt dependencies are installed.") from e
-    # Initialize configuration
+        raise OperationalException("...") from e
     config = setup_optimize_configuration(args, RunMode.HYPEROPT)
-
-    logger.info('Starting three in Hyperopt mode')
 
     lock = FileLock(Hyperopt.get_lock_filename(config))
 
     try:
         with lock.acquire(timeout=1):
 
-            # Remove noisy log messages
-            logging.getLogger('hyperopt.tpe').setLevel(logging.WARNING)
-            logging.getLogger('filelock').setLevel(logging.WARNING)
-
-            # Initialize backtesting object
+            # 백테스팅 실행
             hyperopt = Hyperopt(config)
             hyperopt.start()
 
     except Timeout:
-        logger.info("Another running instance of three Hyperopt detected.")
-        logger.info("Simultaneous execution of multiple Hyperopt commands is not supported. "
-                    "Hyperopt module is resource hungry. Please run your Hyperopt sequentially "
-                    "or on separate machines.")
-        logger.info("Quitting now.")
-        # TODO: return False here in order to help three to exit
-        # with non-zero exit code...
-        # Same in Edge and Backtesting start() functions.
-
-
-def start_edge(args: Dict[str, Any]) -> None:
-    """
-    Start Edge script
-    :param args: Cli args from Arguments()
-    :return: None
-    """
-    from threee.optimize.edge_cli import EdgeCli
-
-    # Initialize configuration
-    config = setup_optimize_configuration(args, RunMode.EDGE)
-    logger.info('Starting freqtrade in Edge mode')
-
-    # Initialize Edge object
-    edge_cli = EdgeCli(config)
-    edge_cli.start()
+        None

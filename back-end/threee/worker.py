@@ -151,15 +151,14 @@ class Worker:
         try:
             self.freqtrade.process()
         except TemporaryError as error:
-            logger.warning(f"Error: {error}, retrying in {constants.RETRY_TIMEOUT} seconds...")
-            time.sleep(constants.RETRY_TIMEOUT)
+            None
         except OperationalException:
             tb = traceback.format_exc()
             hint = 'Issue `/start` if you think it is safe to restart.'
 
             self.freqtrade.notify_status(f'OperationalException:\n```\n{tb}```{hint}')
 
-            logger.exception('OperationalException. Stopping trader ...')
+            
             self.freqtrade.state = State.STOPPED
 
     def _reconfigure(self) -> None:
