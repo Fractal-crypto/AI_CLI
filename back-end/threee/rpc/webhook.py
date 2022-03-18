@@ -1,6 +1,4 @@
-"""
-This module manages webhook communication
-"""
+
 import logging
 import time
 from typing import Any, Dict
@@ -11,21 +9,9 @@ from threee.enums import RPCMessageType
 from threee.rpc import RPC, RPCHandler
 
 
-logger = logging.getLogger(__name__)
-
-logger.debug('Included module rpc.webhook ...')
-
-
 class Webhook(RPCHandler):
-    """  This class handles all webhook communication """
 
     def __init__(self, rpc: RPC, config: Dict[str, Any]) -> None:
-        """
-        Init the Webhook class, and init the super class RPCHandler
-        :param rpc: instance of RPC Helper class
-        :param config: Configuration object
-        :return: None
-        """
         super().__init__(rpc, config)
 
         self._url = self._config['webhook']['url']
@@ -34,14 +20,9 @@ class Webhook(RPCHandler):
         self._retry_delay = self._config['webhook'].get('retry_delay', 0.1)
 
     def cleanup(self) -> None:
-        """
-        Cleanup pending module resources.
-        This will do nothing for webhooks, they will simply not be called anymore
-        """
         pass
 
     def send_msg(self, msg: Dict[str, Any]) -> None:
-        """ Send a message to telegram channel """
         try:
 
             if msg['type'] == RPCMessageType.BUY:
@@ -63,17 +44,15 @@ class Webhook(RPCHandler):
             else:
                 raise NotImplementedError('Unknown message type: {}'.format(msg['type']))
             if not valuedict:
-                logger.info("Message type '%s' not configured for webhooks", msg['type'])
+
                 return
 
             payload = {key: value.format(**msg) for (key, value) in valuedict.items()}
             self._send_msg(payload)
         except KeyError as exc:
-            logger.exception("Problem calling Webhook. Please check your webhook configuration. "
-                             "Exception: %s", exc)
+            pass
 
     def _send_msg(self, payload: dict) -> None:
-        """do the actual call to the webhook"""
 
         success = False
         attempts = 0
@@ -81,7 +60,6 @@ class Webhook(RPCHandler):
             if attempts:
                 if self._retry_delay:
                     time.sleep(self._retry_delay)
-                logger.info("Retrying webhook...")
 
             attempts += 1
 
@@ -96,9 +74,8 @@ class Webhook(RPCHandler):
                 else:
                     raise NotImplementedError('Unknown format: {}'.format(self._format))
 
-                # Throw a RequestException if the post was not successful
                 response.raise_for_status()
                 success = True
 
             except RequestException as exc:
-                logger.warning("Could not call webhook url. Exception: %s", exc)
+                pass

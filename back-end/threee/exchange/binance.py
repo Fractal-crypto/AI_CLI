@@ -1,13 +1,9 @@
-""" Binance exchange subclass """
 import logging
 from typing import Dict, List, Tuple
 
 import arrow
 
 from threee.exchange import Exchange
-
-
-logger = logging.getLogger(__name__)
 
 
 class Binance(Exchange):
@@ -24,10 +20,7 @@ class Binance(Exchange):
     }
 
     def stoploss_adjust(self, stop_loss: float, order: Dict) -> bool:
-        """
-        Verify stop_loss against stoploss-order value (limit or price)
-        Returns True if adjustment is necessary.
-        """
+        #stop_loss 확인후 조정이 필요한 경우 True를 반환
         return order['type'] == 'stop_loss_limit' and stop_loss > float(order['info']['stopPrice'])
 
     async def _async_get_historic_ohlcv(self, pair: str, timeframe: str,
@@ -35,16 +28,14 @@ class Binance(Exchange):
                                         raise_: bool = False
                                         ) -> Tuple[str, str, List]:
         """
-        Overwrite to introduce "fast new pair" functionality by detecting the pair's listing date
-        Does not work for other exchanges, which don't return the earliest data when called with "0"
+        새로운 종목생기면 종목리스트에 추가
         """
         if is_new_pair:
             x = await self._async_get_candle_history(pair, timeframe, 0)
             if x and x[2] and x[2][0] and x[2][0][0] > since_ms:
-                # Set starting date to first available candle.
+                # 시작 날짜를 사용 가능한 첫 번째로 설정
                 since_ms = x[2][0][0]
-                logger.info(f"Candle-data for {pair} available starting with "
-                            f"{arrow.get(since_ms // 1000).isoformat()}.")
+
         return await super()._async_get_historic_ohlcv(
             pair=pair, timeframe=timeframe, since_ms=since_ms, is_new_pair=is_new_pair,
             raise_=raise_)

@@ -1,4 +1,3 @@
-# flake8: noqa: F401
 from threee.exchange import (timeframe_to_minutes, timeframe_to_msecs, timeframe_to_next_date,
                                 timeframe_to_prev_date, timeframe_to_seconds)
 from threee.strategy.hyper import (BooleanParameter, CategoricalParameter, DecimalParameter,

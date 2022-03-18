@@ -3,7 +3,7 @@ from enum import Enum
 
 class State(Enum):
     """
-    Bot application states
+    트레이딩 상태 정보
     """
     RUNNING = 1
     STOPPED = 2

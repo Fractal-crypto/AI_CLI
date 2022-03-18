@@ -1,6 +1,3 @@
-"""
-Protection manager class
-"""
 import logging
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
@@ -9,9 +6,6 @@ from threee.persistence import PairLocks
 from threee.persistence.models import PairLock
 from threee.plugins.protections import IProtection
 from threee.resolvers import ProtectionResolver
-
-
-logger = logging.getLogger(__name__)
 
 
 class ProtectionManager():
@@ -28,20 +22,12 @@ class ProtectionManager():
             )
             self._protection_handlers.append(protection_handler)
 
-        if not self._protection_handlers:
-            logger.info("No protection Handlers defined.")
 
     @property
     def name_list(self) -> List[str]:
-        """
-        Get list of loaded Protection Handler names
-        """
         return [p.name for p in self._protection_handlers]
 
     def short_desc(self) -> List[Dict]:
-        """
-        List of short_desc for each Pairlist Handler
-        """
         return [{p.name: p.short_desc()} for p in self._protection_handlers]
 
     def global_stop(self, now: Optional[datetime] = None) -> Optional[PairLock]:
@@ -52,7 +38,6 @@ class ProtectionManager():
             if protection_handler.has_global_stop:
                 lock, until, reason = protection_handler.global_stop(now)
 
-                # Early stopping - first positive result blocks further trades
                 if lock and until:
                     if not PairLocks.is_global_lock(until):
                         result = PairLocks.lock_pair('*', until, reason, now=now)

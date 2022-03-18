@@ -17,9 +17,6 @@ from threee.exchange import Exchange
 from threee.misc import format_ms_time
 
 
-logger = logging.getLogger(__name__)
-
-
 def load_pair_history(pair: str,
                       timeframe: str,
                       datadir: Path, *,
@@ -31,19 +28,8 @@ def load_pair_history(pair: str,
                       data_handler: IDataHandler = None,
                       ) -> DataFrame:
     """
-    Load cached ohlcv history for the given pair.
-
-    :param pair: Pair to load data for
-    :param timeframe: Timeframe (e.g. "5m")
-    :param datadir: Path to the data storage location.
-    :param data_format: Format of the data. Ignored if data_handler is set.
-    :param timerange: Limit data to be loaded to this timerange
-    :param fill_up_missing: Fill missing values with "No action"-candles
-    :param drop_incomplete: Drop last candle assuming it may be incomplete.
-    :param startup_candles: Additional candles to load at the start of the period
-    :param data_handler: Initialized data-handler to use.
-                         Will be initialized from data_format if not set
-    :return: DataFrame with ohlcv data, or empty DataFrame
+    주어진 종목의 ohlcv 데이터 불러오기 종목, 데이터프레임, 데이터 저장장소, 기간, 시작-끝 데이터
+    빠진 데이터로 구성
     """
     data_handler = get_datahandler(datadir, data_format, data_handler)
 
@@ -66,21 +52,10 @@ def load_data(datadir: Path,
               data_format: str = 'json',
               ) -> Dict[str, DataFrame]:
     """
-    Load ohlcv history data for a list of pairs.
-
-    :param datadir: Path to the data storage location.
-    :param timeframe: Timeframe (e.g. "5m")
-    :param pairs: List of pairs to load
-    :param timerange: Limit data to be loaded to this timerange
-    :param fill_up_missing: Fill missing values with "No action"-candles
-    :param startup_candles: Additional candles to load at the start of the period
-    :param fail_without_data: Raise OperationalException if no data is found.
-    :param data_format: Data format which should be used. Defaults to json
-    :return: dict(<pair>:<Dataframe>)
+    주어진 종목의 ohlcv 데이터 불러오기 리스트
     """
     result: Dict[str, DataFrame] = {}
-    if startup_candles > 0 and timerange:
-        logger.info(f'Using indicator startup period: {startup_candles} ...')
+
 
     data_handler = get_datahandler(datadir, data_format)
 
@@ -95,7 +70,7 @@ def load_data(datadir: Path,
             result[pair] = hist
 
     if fail_without_data and not result:
-        raise OperationalException("No data found. Terminating.")
+        raise OperationalException("데이터 없음.. 종료")
     return result
 
 
@@ -107,14 +82,7 @@ def refresh_data(datadir: Path,
                  timerange: Optional[TimeRange] = None,
                  ) -> None:
     """
-    Refresh ohlcv history data for a list of pairs.
-
-    :param datadir: Path to the data storage location.
-    :param timeframe: Timeframe (e.g. "5m")
-    :param pairs: List of pairs to load
-    :param exchange: Exchange object
-    :param data_format: dataformat to use
-    :param timerange: Limit data to be loaded to this timerange
+    ohlcv데이터 다시가져오기
     """
     data_handler = get_datahandler(datadir, data_format)
     for idx, pair in enumerate(pairs):
@@ -127,32 +95,25 @@ def refresh_data(datadir: Path,
 def _load_cached_data_for_updating(pair: str, timeframe: str, timerange: Optional[TimeRange],
                                    data_handler: IDataHandler) -> Tuple[DataFrame, Optional[int]]:
     """
-    Load cached data to download more data.
-    If timerange is passed in, checks whether data from an before the stored data will be
-    downloaded.
-    If that's the case then what's available should be completely overwritten.
-    Otherwise downloads always start at the end of the available data to avoid data gaps.
-    Note: Only used by download_pair_history().
+    데이터 전부다 더 가져오고 이미 있는 데이터는 오버라이드하며 저장
     """
     start = None
     if timerange:
         if timerange.starttype == 'date':
             start = datetime.fromtimestamp(timerange.startts, tz=timezone.utc)
 
-    # Intentionally don't pass timerange in - since we need to load the full dataset.
     data = data_handler.ohlcv_load(pair, timeframe=timeframe,
                                    timerange=None, fill_missing=False,
                                    drop_incomplete=True, warn_no_data=False)
     if not data.empty:
         if start and start < data.iloc[0]['date']:
-            # Earlier data than existing data requested, redownload all
+
             data = DataFrame(columns=DEFAULT_DATAFRAME_COLUMNS)
         else:
             start = data.iloc[-1]['date']
 
     start_ms = int(start.timestamp() * 1000) if start else None
     return data, start_ms
-
 
 def _download_pair_history(pair: str, *,
                            datadir: Path,
@@ -163,36 +124,15 @@ def _download_pair_history(pair: str, *,
                            data_handler: IDataHandler = None,
                            timerange: Optional[TimeRange] = None) -> bool:
     """
-    Download latest candles from the exchange for the pair and timeframe passed in parameters
-    The data is downloaded starting from the last correct data that
-    exists in a cache. If timerange starts earlier than the data in the cache,
-    the full data will be redownloaded
-
-    Based on @Rybolov work: https://github.com/rybolov/freqtrade-data
-
-    :param pair: pair to download
-    :param timeframe: Timeframe (e.g "5m")
-    :param timerange: range of time to download
-    :return: bool with success state
+    마지막으로 가져온 데이터를 인식하고 다운로드 하면 그다음부터 다운로드 하도록 설계
     """
     data_handler = get_datahandler(datadir, data_handler=data_handler)
 
     try:
-        logger.info(
-            f'Download history data for pair: "{pair}" ({process}), timeframe: {timeframe} '
-            f'and store in {datadir}.'
-        )
-
-        # data, since_ms = _load_cached_data_for_updating_old(datadir, pair, timeframe, timerange)
         data, since_ms = _load_cached_data_for_updating(pair, timeframe, timerange,
                                                         data_handler=data_handler)
 
-        logger.debug("Current Start: %s",
-                     f"{data.iloc[0]['date']:%Y-%m-%d %H:%M:%S}" if not data.empty else 'None')
-        logger.debug("Current End: %s",
-                     f"{data.iloc[-1]['date']:%Y-%m-%d %H:%M:%S}" if not data.empty else 'None')
-
-        # Default since_ms to 30 days if nothing is given
+        # 최소데이터 30일 데이터 가져오도록 설정
         new_data = exchange.get_historic_ohlcv(pair=pair,
                                                timeframe=timeframe,
                                                since_ms=since_ms if since_ms else
@@ -200,63 +140,43 @@ def _download_pair_history(pair: str, *,
                                                    days=-new_pairs_days).int_timestamp * 1000,
                                                is_new_pair=data.empty
                                                )
-        # TODO: Maybe move parsing to exchange class (?)
+
         new_dataframe = ohlcv_to_dataframe(new_data, timeframe, pair,
                                            fill_missing=False, drop_incomplete=True)
         if data.empty:
             data = new_dataframe
         else:
-            # Run cleaning again to ensure there were no duplicate candles
-            # Especially between existing and new data.
+            # 존재하는 데이터는 전부 지워버리고 새로 다운로드
             data = clean_ohlcv_dataframe(concat([data, new_dataframe], axis=0), timeframe, pair,
                                          fill_missing=False, drop_incomplete=False)
-
-        logger.debug("New  Start: %s",
-                     f"{data.iloc[0]['date']:%Y-%m-%d %H:%M:%S}" if not data.empty else 'None')
-        logger.debug("New End: %s",
-                     f"{data.iloc[-1]['date']:%Y-%m-%d %H:%M:%S}" if not data.empty else 'None')
 
         data_handler.ohlcv_store(pair, timeframe, data=data)
         return True
 
     except Exception:
-        logger.exception(
-            f'Failed to download history data for pair: "{pair}", timeframe: {timeframe}.'
-        )
+        None
         return False
-
 
 def refresh_backtest_ohlcv_data(exchange: Exchange, pairs: List[str], timeframes: List[str],
                                 datadir: Path, timerange: Optional[TimeRange] = None,
                                 new_pairs_days: int = 30, erase: bool = False,
                                 data_format: str = None) -> List[str]:
     """
-    Refresh stored ohlcv data for backtesting and hyperopt operations.
-    Used by freqtrade download-data subcommand.
-    :return: List of pairs that are not available.
+    백테스팅에 필요한 ohlcv 데이터 다시 불러오기
     """
     pairs_not_available = []
     data_handler = get_datahandler(datadir, data_format)
     for idx, pair in enumerate(pairs, start=1):
         if pair not in exchange.markets:
             pairs_not_available.append(pair)
-            logger.info(f"Skipping pair {pair}...")
             continue
         for timeframe in timeframes:
-
-            if erase:
-                if data_handler.ohlcv_purge(pair, timeframe):
-                    logger.info(
-                        f'Deleting existing data for pair {pair}, interval {timeframe}.')
-
-            logger.info(f'Downloading pair {pair}, interval {timeframe}.')
             process = f'{idx}/{len(pairs)}'
             _download_pair_history(pair=pair, process=process,
                                    datadir=datadir, exchange=exchange,
                                    timerange=timerange, data_handler=data_handler,
                                    timeframe=str(timeframe), new_pairs_days=new_pairs_days)
     return pairs_not_available
-
 
 def _download_trades_history(exchange: Exchange,
                              pair: str, *,
@@ -265,11 +185,9 @@ def _download_trades_history(exchange: Exchange,
                              data_handler: IDataHandler
                              ) -> bool:
     """
-    Download trade history from the exchange.
-    Appends to previously downloaded trades data.
+    거래 기록 데이터 거래소에서 가져오기
     """
     try:
-
         until = None
         if (timerange and timerange.starttype == 'date'):
             since = timerange.startts * 1000
@@ -280,47 +198,29 @@ def _download_trades_history(exchange: Exchange,
 
         trades = data_handler.trades_load(pair)
 
-        # TradesList columns are defined in constants.DEFAULT_TRADES_COLUMNS
-        # DEFAULT_TRADES_COLUMNS: 0 -> timestamp
-        # DEFAULT_TRADES_COLUMNS: 1 -> id
-
         if trades and since < trades[0][0]:
-            # since is before the first trade
-            logger.info(f"Start earlier than available data. Redownloading trades for {pair}...")
+
             trades = []
 
         from_id = trades[-1][1] if trades else None
         if trades and since < trades[-1][0]:
-            # Reset since to the last available point
-            # - 5 seconds (to ensure we're getting all trades)
             since = trades[-1][0] - (5 * 1000)
-            logger.info(f"Using last trade date -5s - Downloading trades for {pair} "
-                        f"since: {format_ms_time(since)}.")
 
-        logger.debug(f"Current Start: {format_ms_time(trades[0][0]) if trades else 'None'}")
-        logger.debug(f"Current End: {format_ms_time(trades[-1][0]) if trades else 'None'}")
-        logger.info(f"Current Amount of trades: {len(trades)}")
 
-        # Default since_ms to 30 days if nothing is given
         new_trades = exchange.get_historic_trades(pair=pair,
                                                   since=since,
                                                   until=until,
                                                   from_id=from_id,
                                                   )
         trades.extend(new_trades[1])
-        # Remove duplicates to make sure we're not storing data we don't need
+
         trades = trades_remove_duplicates(trades)
         data_handler.trades_store(pair, data=trades)
 
-        logger.debug(f"New Start: {format_ms_time(trades[0][0])}")
-        logger.debug(f"New End: {format_ms_time(trades[-1][0])}")
-        logger.info(f"New Amount of trades: {len(trades)}")
         return True
 
     except Exception:
-        logger.exception(
-            f'Failed to download historic trades for pair: "{pair}". '
-        )
+        None
         return False
 
 
@@ -328,23 +228,16 @@ def refresh_backtest_trades_data(exchange: Exchange, pairs: List[str], datadir: 
                                  timerange: TimeRange, new_pairs_days: int = 30,
                                  erase: bool = False, data_format: str = 'jsongz') -> List[str]:
     """
-    Refresh stored trades data for backtesting and hyperopt operations.
-    Used by freqtrade download-data subcommand.
-    :return: List of pairs that are not available.
+    백테스팅용 트레이딩 데이터 다시 불러오기
     """
     pairs_not_available = []
     data_handler = get_datahandler(datadir, data_format=data_format)
     for pair in pairs:
         if pair not in exchange.markets:
             pairs_not_available.append(pair)
-            logger.info(f"Skipping pair {pair}...")
+
             continue
 
-        if erase:
-            if data_handler.trades_purge(pair):
-                logger.info(f'Deleting existing data for pair {pair}.')
-
-        logger.info(f'Downloading trades for pair {pair}.')
         _download_trades_history(exchange=exchange,
                                  pair=pair,
                                  new_pairs_days=new_pairs_days,
@@ -358,7 +251,7 @@ def convert_trades_to_ohlcv(pairs: List[str], timeframes: List[str],
                             data_format_ohlcv: str = 'json',
                             data_format_trades: str = 'jsongz') -> None:
     """
-    Convert stored trades data to ohlcv data
+    저장된 트레이딩 데이터 ohlcv 로 변환
     """
     data_handler_trades = get_datahandler(datadir, data_format=data_format_trades)
     data_handler_ohlcv = get_datahandler(datadir, data_format=data_format_ohlcv)
@@ -366,23 +259,18 @@ def convert_trades_to_ohlcv(pairs: List[str], timeframes: List[str],
     for pair in pairs:
         trades = data_handler_trades.trades_load(pair)
         for timeframe in timeframes:
-            if erase:
-                if data_handler_ohlcv.ohlcv_purge(pair, timeframe):
-                    logger.info(f'Deleting existing data for pair {pair}, interval {timeframe}.')
+
             try:
                 ohlcv = trades_to_ohlcv(trades, timeframe)
-                # Store ohlcv
+                # 저장
                 data_handler_ohlcv.ohlcv_store(pair, timeframe, data=ohlcv)
             except ValueError:
-                logger.exception(f'Could not convert {pair} to OHLCV.')
+                None
 
 
 def get_timerange(data: Dict[str, DataFrame]) -> Tuple[datetime, datetime]:
     """
-    Get the maximum common timerange for the given backtest data.
-
-    :param data: dictionary with preprocessed backtesting data
-    :return: tuple containing min_date, max_date
+    최대로 백테스팅 데이터 적용해서 데이터 불러오기 예) 100일 데이터 전부 불러와서 백테스팅
     """
     timeranges = [
         (frame['date'].min().to_pydatetime(), frame['date'].max().to_pydatetime())
@@ -391,24 +279,14 @@ def get_timerange(data: Dict[str, DataFrame]) -> Tuple[datetime, datetime]:
     return (min(timeranges, key=operator.itemgetter(0))[0],
             max(timeranges, key=operator.itemgetter(1))[1])
 
-
 def validate_backtest_data(data: DataFrame, pair: str, min_date: datetime,
                            max_date: datetime, timeframe_min: int) -> bool:
     """
-    Validates preprocessed backtesting data for missing values and shows warnings about it that.
-
-    :param data: preprocessed backtesting data (as DataFrame)
-    :param pair: pair used for log output.
-    :param min_date: start-date of the data
-    :param max_date: end-date of the data
-    :param timeframe_min: Timeframe in minutes
+    만약에 백테스팅 ohlcv 데이터가 부족하게 들어고면 경고 예)20200404의 데이터가 없음
     """
-    # total difference in minutes / timeframe-minutes
+    # 시간프레임 변환
     expected_frames = int((max_date - min_date).total_seconds() // 60 // timeframe_min)
     found_missing = False
     dflen = len(data)
-    if dflen < expected_frames:
-        found_missing = True
-        logger.warning("%s has missing frames: expected %s, got %s, that's %s missing values",
-                       pair, expected_frames, dflen, expected_frames - dflen)
+
     return found_missing

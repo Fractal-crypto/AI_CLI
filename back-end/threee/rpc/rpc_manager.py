@@ -8,68 +8,46 @@ from threee.enums import RPCMessageType
 from threee.rpc import RPC, RPCHandler
 
 
-logger = logging.getLogger(__name__)
-
-
 class RPCManager:
-    """
-    Class to manage RPC objects (Telegram, API, ...)
-    """
-
     def __init__(self, freqtrade) -> None:
-        """ Initializes all enabled rpc modules """
         self.registered_modules: List[RPCHandler] = []
         self._rpc = RPC(freqtrade)
         config = freqtrade.config
-        # Enable telegram
         if config.get('telegram', {}).get('enabled', False):
-            logger.info('Enabling rpc.telegram ...')
             from threee.rpc.telegram import Telegram
             self.registered_modules.append(Telegram(self._rpc, config))
 
-        # Enable Webhook
         if config.get('webhook', {}).get('enabled', False):
-            logger.info('Enabling rpc.webhook ...')
             from threee.rpc.webhook import Webhook
             self.registered_modules.append(Webhook(self._rpc, config))
 
-        # Enable local rest api server for cmd line control
+
         if config.get('api_server', {}).get('enabled', False):
-            logger.info('Enabling rpc.api_server')
+
             from threee.rpc.api_server import ApiServer
             apiserver = ApiServer(config)
             apiserver.add_rpc_handler(self._rpc)
             self.registered_modules.append(apiserver)
 
     def cleanup(self) -> None:
-        """ Stops all enabled rpc modules """
-        logger.info('Cleaning up rpc modules ...')
+
+
         while self.registered_modules:
             mod = self.registered_modules.pop()
-            logger.info('Cleaning up rpc.%s ...', mod.name)
+
             mod.cleanup()
             del mod
 
     def send_msg(self, msg: Dict[str, Any]) -> None:
-        """
-        Send given message to all registered rpc modules.
-        A message consists of one or more key value pairs of strings.
-        e.g.:
-        {
-            'status': 'stopping bot'
-        }
-        """
-        logger.info('Sending rpc message: %s', msg)
         if 'pair' in msg:
             msg.update({
                 'base_currency': self._rpc._threee.exchange.get_pair_base_currency(msg['pair'])
                 })
         for mod in self.registered_modules:
-            logger.debug('Forwarding message to rpc.%s', mod.name)
             try:
                 mod.send_msg(msg)
             except NotImplementedError:
-                logger.error(f"Message type '{msg['type']}' not implemented by handler {mod.name}.")
+                pass
 
     def startup_messages(self, config: Dict[str, Any], pairlist, protections) -> None:
         if config['dry_run']:

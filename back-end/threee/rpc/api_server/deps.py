@@ -22,7 +22,7 @@ def get_rpc() -> Optional[Iterator[RPC]]:
         yield _rpc
         Trade.query.session.rollback()
     else:
-        raise RPCException('Bot is not in the correct state')
+        pass
 
 
 def get_config() -> Dict[str, Any]:

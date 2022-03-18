@@ -1,8 +1,3 @@
-"""
-IHyperOptLoss interface
-This module defines the interface for the loss-function for hyperopt
-"""
-
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Dict
@@ -12,8 +7,7 @@ from pandas import DataFrame
 
 class IHyperOptLoss(ABC):
     """
-    Interface for freqtrade hyperopt Loss functions.
-    Defines the custom loss function (`hyperopt_loss_function()` which is evaluated every epoch.)
+    hyperopt 손실 함수용 인터페이스
     """
     timeframe: str
 
@@ -25,5 +19,5 @@ class IHyperOptLoss(ABC):
                                backtest_stats: Dict[str, Any],
                                *args, **kwargs) -> float:
         """
-        Objective function, returns smaller number for better results
+        더 나은 결과를 위해 더 작은 수를 반환
         """

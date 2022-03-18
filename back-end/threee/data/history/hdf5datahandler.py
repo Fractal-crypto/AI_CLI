@@ -12,10 +12,6 @@ from threee.constants import (DEFAULT_DATAFRAME_COLUMNS, DEFAULT_TRADES_COLUMNS,
 
 from .idatahandler import IDataHandler
 
-
-logger = logging.getLogger(__name__)
-
-
 class HDF5DataHandler(IDataHandler):
 
     _columns = DEFAULT_DATAFRAME_COLUMNS
@@ -23,9 +19,7 @@ class HDF5DataHandler(IDataHandler):
     @classmethod
     def ohlcv_get_available_data(cls, datadir: Path) -> ListPairsWithTimeframes:
         """
-        Returns a list of all pairs with ohlcv data available in this datadir
-        :param datadir: Directory to search for ohlcv files
-        :return: List of Tuples of (pair, timeframe)
+        모든 종목과 각각의 기간 데이터를 출력
         """
         _tmp = [re.search(r'^([a-zA-Z_]+)\-(\d+\S+)(?=.h5)', p.name)
                 for p in datadir.glob("*.h5")]
@@ -35,31 +29,20 @@ class HDF5DataHandler(IDataHandler):
     @classmethod
     def ohlcv_get_pairs(cls, datadir: Path, timeframe: str) -> List[str]:
         """
-        Returns a list of all pairs with ohlcv data available in this datadir
-        for the specified timeframe
-        :param datadir: Directory to search for ohlcv files
-        :param timeframe: Timeframe to search pairs for
-        :return: List of Pairs
+        각 종목의 기간데이터에 맞는 ohlcv 데이터를 가져오기
         """
-
         _tmp = [re.search(r'^(\S+)(?=\-' + timeframe + '.h5)', p.name)
                 for p in datadir.glob(f"*{timeframe}.h5")]
-        # Check if regex found something and only return these results
         return [match[0].replace('_', '/') for match in _tmp if match]
 
     def ohlcv_store(self, pair: str, timeframe: str, data: pd.DataFrame) -> None:
         """
-        Store data in hdf5 file.
-        :param pair: Pair - used to generate filename
-        :param timeframe: Timeframe - used to generate filename
-        :param data: Dataframe containing OHLCV data
-        :return: None
+        모든 데이터를 hdf5 형식으로 저장
+        구성은 종목, 타임프레임 , ohlcv 데이터로 리턴
         """
         key = self._pair_ohlcv_key(pair, timeframe)
         _data = data.copy()
-
         filename = self._pair_data_filename(self._datadir, pair, timeframe)
-
         _data.loc[:, self._columns].to_hdf(
             filename, key, mode='a', complevel=9, complib='blosc',
             format='table', data_columns=['date']
@@ -68,15 +51,8 @@ class HDF5DataHandler(IDataHandler):
     def _ohlcv_load(self, pair: str, timeframe: str,
                     timerange: Optional[TimeRange] = None) -> pd.DataFrame:
         """
-        Internal method used to load data for one pair from disk.
-        Implements the loading and conversion to a Pandas dataframe.
-        Timerange trimming and dataframe validation happens outside of this method.
-        :param pair: Pair to load data
-        :param timeframe: Timeframe (e.g. "5m")
-        :param timerange: Limit data to be loaded to this timerange.
-                        Optionally implemented by subclasses to avoid loading
-                        all data where possible.
-        :return: DataFrame with ohlcv data, or empty DataFrame
+        저장된 ohlcv 데이터 불러오기
+        각각의 타임프레임, 종목에 따라 다르게 데이터 로딩
         """
         key = self._pair_ohlcv_key(pair, timeframe)
         filename = self._pair_data_filename(self._datadir, pair, timeframe)
@@ -92,42 +68,30 @@ class HDF5DataHandler(IDataHandler):
 
         pairdata = pd.read_hdf(filename, key=key, mode="r", where=where)
 
-        if list(pairdata.columns) != self._columns:
-            raise ValueError("Wrong dataframe format")
         pairdata = pairdata.astype(dtype={'open': 'float', 'high': 'float',
                                           'low': 'float', 'close': 'float', 'volume': 'float'})
         return pairdata
 
     def ohlcv_append(self, pair: str, timeframe: str, data: pd.DataFrame) -> None:
         """
-        Append data to existing data structures
-        :param pair: Pair
-        :param timeframe: Timeframe this ohlcv data is for
-        :param data: Data to append.
+        저장된 ohlc 파일에 이어서 데이터 붙이기
         """
         raise NotImplementedError()
 
     @classmethod
     def trades_get_pairs(cls, datadir: Path) -> List[str]:
         """
-        Returns a list of all pairs for which trade data is available in this
-        :param datadir: Directory to search for ohlcv files
-        :return: List of Pairs
+        모든 트레이딩 가능한 데이터 불러오기
         """
         _tmp = [re.search(r'^(\S+)(?=\-trades.h5)', p.name)
                 for p in datadir.glob("*trades.h5")]
-        # Check if regex found something and only return these results to avoid exceptions.
         return [match[0].replace('_', '/') for match in _tmp if match]
 
     def trades_store(self, pair: str, data: TradeList) -> None:
         """
-        Store trades data (list of Dicts) to file
-        :param pair: Pair - used for filename
-        :param data: List of Lists containing trade data,
-                     column sequence as in DEFAULT_TRADES_COLUMNS
+        데이터를 리스트형식으로 변환하여 저장
         """
         key = self._pair_trades_key(pair)
-
         pd.DataFrame(data, columns=DEFAULT_TRADES_COLUMNS).to_hdf(
             self._pair_trades_filename(self._datadir, pair), key,
             mode='a', complevel=9, complib='blosc',
@@ -136,19 +100,13 @@ class HDF5DataHandler(IDataHandler):
 
     def trades_append(self, pair: str, data: TradeList):
         """
-        Append data to existing files
-        :param pair: Pair - used for filename
-        :param data: List of Lists containing trade data,
-                     column sequence as in DEFAULT_TRADES_COLUMNS
+        종목데이터 연결해서 붙이기
         """
         raise NotImplementedError()
 
     def _trades_load(self, pair: str, timerange: Optional[TimeRange] = None) -> TradeList:
         """
-        Load a pair from h5 file.
-        :param pair: Load trades for this pair
-        :param timerange: Timerange to load trades for - currently not implemented
-        :return: List of trades
+        hdf5 파일 불러오고 각종목 리스트 변환
         """
         key = self._pair_trades_key(pair)
         filename = self._pair_trades_filename(self._datadir, pair)

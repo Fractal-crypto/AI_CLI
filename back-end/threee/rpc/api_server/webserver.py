@@ -12,18 +12,10 @@ from threee.exceptions import OperationalException
 from threee.rpc.api_server.uvicorn_threaded import UvicornServer
 from threee.rpc.rpc import RPC, RPCException, RPCHandler
 
-
-logger = logging.getLogger(__name__)
-
-
 class FTJSONResponse(JSONResponse):
     media_type = "application/json"
 
     def render(self, content: Any) -> bytes:
-        """
-        Use rapidjson for responses
-        Handles NaN and Inf / -Inf in a javascript way by default.
-        """
         return rapidjson.dumps(content).encode("utf-8")
 
 
@@ -33,7 +25,6 @@ class ApiServer(RPCHandler):
     __initialized = False
 
     _rpc: RPC
-    # Backtesting type: Backtesting
     _bt = None
     _bt_data = None
     _bt_timerange = None
@@ -41,14 +32,9 @@ class ApiServer(RPCHandler):
     _has_rpc: bool = False
     _bgtask_running: bool = False
     _config: Dict[str, Any] = {}
-    # Exchange - only available in webserver mode.
     _exchange = None
 
     def __new__(cls, *args, **kwargs):
-        """
-        This class is a singleton.
-        We'll only have one instance of it around.
-        """
         if ApiServer.__instance is None:
             ApiServer.__instance = object.__new__(cls)
             ApiServer.__initialized = False
@@ -74,22 +60,16 @@ class ApiServer(RPCHandler):
         self.start_api()
 
     def add_rpc_handler(self, rpc: RPC):
-        """
-        Attach rpc handler
-        """
         if not self._has_rpc:
             ApiServer._rpc = rpc
             ApiServer._has_rpc = True
         else:
-            # This should not happen assuming we didn't mess up.
             raise OperationalException('RPC Handler already attached.')
 
     def cleanup(self) -> None:
-        """ Cleanup pending module resources """
         ApiServer._has_rpc = False
         del ApiServer._rpc
         if self._server and not self._standalone:
-            logger.info("Stopping API Server")
             self._server.cleanup()
 
     @classmethod
@@ -104,7 +84,6 @@ class ApiServer(RPCHandler):
         pass
 
     def handle_rpc_exception(self, request, exc):
-        logger.exception(f"API Error calling: {exc}")
         return JSONResponse(
             status_code=502,
             content={'error': f"Error querying {request.url.path}: {exc.message}"}
@@ -126,7 +105,6 @@ class ApiServer(RPCHandler):
                            dependencies=[Depends(http_basic_or_jwt_token)],
                            )
         app.include_router(router_login, prefix="/api/v1", tags=["auth"])
-        # UI Router MUST be last!
         app.include_router(router_ui, prefix='')
 
         app.add_middleware(
@@ -146,22 +124,7 @@ class ApiServer(RPCHandler):
         rest_ip = self._config['api_server']['listen_ip_address']
         rest_port = self._config['api_server']['listen_port']
 
-        logger.info(f'Starting HTTP Server at {rest_ip}:{rest_port}')
-        if not IPv4Address(rest_ip).is_loopback:
-            logger.warning("SECURITY WARNING - Local Rest Server listening to external connections")
-            logger.warning("SECURITY WARNING - This is insecure please set to your loopback,"
-                           "e.g 127.0.0.1 in config.json")
 
-        if not self._config['api_server'].get('password'):
-            logger.warning("SECURITY WARNING - No password for local REST Server defined. "
-                           "Please make sure that this is intentional!")
-
-        if (self._config['api_server'].get('jwt_secret_key', 'super-secret')
-                in ('super-secret, somethingrandom')):
-            logger.warning("SECURITY WARNING - `jwt_secret_key` seems to be default."
-                           "Others may be able to log into your bot.")
-
-        logger.info('Starting Local Rest Server.')
         verbosity = self._config['api_server'].get('verbosity', 'error')
 
         uvconfig = uvicorn.Config(self.app,
@@ -178,4 +141,4 @@ class ApiServer(RPCHandler):
             else:
                 self._server.run_in_thread()
         except Exception:
-            logger.exception("Api server failed to start.")
+            pass

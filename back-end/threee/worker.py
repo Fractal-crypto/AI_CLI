@@ -1,6 +1,3 @@
-"""
-Main threee worker class.
-"""
 import logging
 import time
 import traceback
@@ -13,22 +10,16 @@ from threee import __version__, constants
 from threee.configuration import Configuration
 from threee.enums import State
 from threee.exceptions import OperationalException, TemporaryError
-from threee.freqtradebot import FreqtradeBot
-
-
-logger = logging.getLogger(__name__)
+from threee.threeebot import threeeBot
 
 
 class Worker:
-    """
-    Freqtradebot worker class
-    """
 
     def __init__(self, args: Dict[str, Any], config: Dict[str, Any] = None) -> None:
         """
-        Init all variables and objects the bot needs to work
+        워커를 통해 거래 시작
         """
-        logger.info(f"Starting worker {__version__}")
+
 
         self._args = args
         self._config = config
@@ -42,15 +33,12 @@ class Worker:
 
     def _init(self, reconfig: bool) -> None:
         """
-        Also called from the _reconfigure() method (with reconfig=True).
+        config에서도 사용가능
         """
         if reconfig or self._config is None:
-            # Load configuration
+
             self._config = Configuration(self._args, None).get_config()
-
-        # Init the instance of the bot
-        self.freqtrade = FreqtradeBot(self._config)
-
+        self.threee = threeeBot(self._config)
         internals_config = self._config.get('internals', {})
         self._throttle_secs = internals_config.get('process_throttle_secs',
                                                    constants.PROCESS_THROTTLE_SECS)
@@ -61,11 +49,9 @@ class Worker:
 
     def _notify(self, message: str) -> None:
         """
-        Removes the need to verify in all occurrences if sd_notify is enabled
-        :param message: Message to send to systemd if it's enabled.
+        사용가능하면 리턴
         """
         if self._sd_notify:
-            logger.debug(f"sd_notify: {message}")
             self._sd_notify.notify(message)
 
     def run(self) -> None:
@@ -77,39 +63,31 @@ class Worker:
 
     def _worker(self, old_state: Optional[State]) -> State:
         """
-        The main routine that runs each throttling iteration and handles the states.
-        :param old_state: the previous service state from the previous call
-        :return: current service state
+        각 쓰로틀이 각자 워커 사용
         """
-        state = self.freqtrade.state
+        state = self.threee.state
 
-        # Log state transition
         if state != old_state:
 
             if old_state != State.RELOAD_CONFIG:
-                self.freqtrade.notify_status(f'{state.name.lower()}')
+                self.threee.notify_status(f'{state.name.lower()}')
 
-            logger.info(
-                f"Changing state{f' from {old_state.name}' if old_state else ''} to: {state.name}")
             if state == State.RUNNING:
-                self.freqtrade.startup()
+                self.threee.startup()
 
             if state == State.STOPPED:
-                self.freqtrade.check_for_open_trades()
+                self.threee.check_for_open_trades()
 
-            # Reset heartbeat timestamp to log the heartbeat message at
-            # first throttling iteration when the state changes
             self._heartbeat_msg = 0
 
         if state == State.STOPPED:
-            # Ping systemd watchdog before sleeping in the stopped state
-            self._notify("WATCHDOG=1\nSTATUS=State: STOPPED.")
-
+            # 프로그램 멈출때 핑
+            self._notify("멈춤")
             self._throttle(func=self._process_stopped, throttle_secs=self._throttle_secs)
 
         elif state == State.RUNNING:
-            # Ping systemd watchdog before throttling
-            self._notify("WATCHDOG=1\nSTATUS=State: RUNNING.")
+            # 시작전에 러닝 표시
+            self._notify("시작")
 
             self._throttle(func=self._process_running, throttle_secs=self._throttle_secs)
 
@@ -117,73 +95,62 @@ class Worker:
             now = time.time()
             if (now - self._heartbeat_msg) > self._heartbeat_interval:
                 version = __version__
-                strategy_version = self.freqtrade.strategy.version()
+                strategy_version = self.threee.strategy.version()
                 if (strategy_version is not None):
                     version += ', strategy_version: ' + strategy_version
-                logger.info(f"Bot heartbeat. PID={getpid()}, "
-                            f"version='{version}', state='{state.name}'")
                 self._heartbeat_msg = now
 
         return state
 
     def _throttle(self, func: Callable[..., Any], throttle_secs: float, *args, **kwargs) -> Any:
         """
-        Throttles the given callable that it
-        takes at least `min_secs` to finish execution.
-        :param func: Any callable
-        :param throttle_secs: throttling interation execution time limit in seconds
-        :return: Any (result of execution of func)
+        쉘위에서 각 실행 결과 표시
         """
         self.last_throttle_start_time = time.time()
-        logger.debug("========================================")
+
         result = func(*args, **kwargs)
         time_passed = time.time() - self.last_throttle_start_time
         sleep_duration = max(throttle_secs - time_passed, 0.0)
-        logger.debug(f"Throttling with '{func.__name__}()': sleep for {sleep_duration:.2f} s, "
-                     f"last iteration took {time_passed:.2f} s.")
+
         time.sleep(sleep_duration)
         return result
 
     def _process_stopped(self) -> None:
-        self.freqtrade.process_stopped()
+        self.threee.process_stopped()
 
     def _process_running(self) -> None:
         try:
-            self.freqtrade.process()
+            self.threee.process()
         except TemporaryError as error:
             None
         except OperationalException:
             tb = traceback.format_exc()
-            hint = 'Issue `/start` if you think it is safe to restart.'
+            hint = 'None'
 
-            self.freqtrade.notify_status(f'OperationalException:\n```\n{tb}```{hint}')
+            self.threee.notify_status()
 
-            
-            self.freqtrade.state = State.STOPPED
+
+            self.threee.state = State.STOPPED
 
     def _reconfigure(self) -> None:
         """
-        Cleans up current freqtradebot instance, reloads the configuration and
-        replaces it with the new instance
+        새로운 config 리로드
         """
-        # Tell systemd that we initiated reconfiguration
-        self._notify("RELOADING=1")
 
-        # Clean up current freqtrade modules
-        self.freqtrade.cleanup()
+        self._notify("다시시작")
 
-        # Load and validate config and create new instance of the bot
+        self.threee.cleanup()
+
         self._init(True)
 
-        self.freqtrade.notify_status('config reloaded')
+        self.threee.notify_status('재설정')
 
-        # Tell systemd that we completed reconfiguration
-        self._notify("READY=1")
+        self._notify("준비")
 
     def exit(self) -> None:
-        # Tell systemd that we are exiting now
-        self._notify("STOPPING=1")
 
-        if self.freqtrade:
-            self.freqtrade.notify_status('process died')
-            self.freqtrade.cleanup()
+        self._notify("멈춤")
+
+        if self.threee:
+            self.threee.notify_status('프로세스 죵료')
+            self.threee.cleanup()

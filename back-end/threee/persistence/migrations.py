@@ -1,11 +1,6 @@
-import logging
 from typing import List
 
 from sqlalchemy import inspect, text
-
-
-logger = logging.getLogger(__name__)
-
 
 def get_table_names_for_table(inspector, tabletype):
     return [t for t in inspector.get_table_names() if t.startswith(tabletype)]
@@ -23,7 +18,7 @@ def get_backup_name(tabs, backup_prefix: str):
     table_back_name = backup_prefix
     for i, table_back_name in enumerate(tabs):
         table_back_name = f'{backup_prefix}{i}'
-        logger.debug(f'trying {table_back_name}')
+
 
     return table_back_name
 
@@ -47,11 +42,7 @@ def get_last_sequence_ids(engine, trade_back_name, order_back_name):
 def set_sequence_ids(engine, order_id, trade_id):
 
     if engine.name == 'postgresql':
-        with engine.begin() as connection:
-            if order_id:
-                connection.execute(text(f"ALTER SEQUENCE orders_id_seq RESTART WITH {order_id}"))
-            if trade_id:
-                connection.execute(text(f"ALTER SEQUENCE trades_id_seq RESTART WITH {trade_id}"))
+        pass
 
 
 def migrate_trades_and_orders_table(
@@ -77,7 +68,6 @@ def migrate_trades_and_orders_table(
     sell_reason = get_column_def(cols, 'sell_reason', 'null')
     strategy = get_column_def(cols, 'strategy', 'null')
     buy_tag = get_column_def(cols, 'buy_tag', 'null')
-    # If ticker-interval existed use that, else null.
     if has_column(cols, 'ticker_interval'):
         timeframe = get_column_def(cols, 'timeframe', 'ticker_interval')
     else:
@@ -91,26 +81,18 @@ def migrate_trades_and_orders_table(
     sell_order_status = get_column_def(cols, 'sell_order_status', 'null')
     amount_requested = get_column_def(cols, 'amount_requested', 'amount')
 
-    # Schema migration necessary
     with engine.begin() as connection:
         connection.execute(text(f"alter table trades rename to {trade_back_name}"))
 
     with engine.begin() as connection:
-        # drop indexes on backup table in new session
-        for index in inspector.get_indexes(trade_back_name):
-            if engine.name == 'mysql':
-                connection.execute(text(f"drop index {index['name']} on {trade_back_name}"))
-            else:
-                connection.execute(text(f"drop index {index['name']}"))
+        pass
 
     order_id, trade_id = get_last_sequence_ids(engine, trade_back_name, order_back_name)
 
     drop_orders_table(engine, order_back_name)
 
-    # let SQLAlchemy create the schema as required
     decl_base.metadata.create_all(engine)
 
-    # Copy data back - following the correct schema
     with engine.begin() as connection:
         connection.execute(text(f"""insert into trades
             (id, exchange, pair, is_open,
@@ -163,8 +145,6 @@ def migrate_open_orders_to_trades(engine):
 
 
 def drop_orders_table(engine, table_back_name: str):
-    # Drop and recreate orders table as backup
-    # This drops foreign keys, too.
 
     with engine.begin() as connection:
         connection.execute(text(f"create table {table_back_name} as select * from orders"))
@@ -190,15 +170,12 @@ def migrate_orders_table(engine, table_back_name: str, cols_order: List):
 
 def set_sqlite_to_wal(engine):
     if engine.name == 'sqlite' and str(engine.url) != 'sqlite://':
-        # Set Mode to
         with engine.begin() as connection:
             connection.execute(text("PRAGMA journal_mode=wal"))
 
 
 def check_migrate(engine, decl_base, previous_tables) -> None:
-    """
-    Checks if migration is necessary and migrates if necessary
-    """
+
     inspector = inspect(engine)
 
     cols = inspector.get_columns('trades')
@@ -208,16 +185,10 @@ def check_migrate(engine, decl_base, previous_tables) -> None:
     order_tabs = get_table_names_for_table(inspector, 'orders')
     order_table_bak_name = get_backup_name(order_tabs, 'orders_bak')
 
-    # Check if migration necessary
-    # Migrates both trades and orders table!
-    # if not has_column(cols, 'buy_tag'):
     if 'orders' not in previous_tables or not has_column(cols_orders, 'ft_fee_base'):
-        logger.info(f"Running database migration for trades - "
-                    f"backup: {table_back_name}, {order_table_bak_name}")
         migrate_trades_and_orders_table(
             decl_base, inspector, engine, table_back_name, cols, order_table_bak_name, cols_orders)
 
     if 'orders' not in previous_tables and 'trades' in previous_tables:
-        logger.info('Moving open orders to Orders table.')
         migrate_open_orders_to_trades(engine)
     set_sqlite_to_wal(engine)

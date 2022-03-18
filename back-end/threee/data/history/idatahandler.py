@@ -1,8 +1,3 @@
-"""
-Abstract datahandler interface.
-It's subclasses handle and storing data from disk.
-
-"""
 import logging
 from abc import ABC, abstractclassmethod, abstractmethod
 from copy import deepcopy
@@ -18,8 +13,9 @@ from threee.constants import ListPairsWithTimeframes, TradeList
 from threee.data.converter import clean_ohlcv_dataframe, trades_remove_duplicates, trim_dataframe
 from threee.exchange import timeframe_to_seconds
 
-
-logger = logging.getLogger(__name__)
+"""
+디스크에 데이터 저장
+"""
 
 
 class IDataHandler(ABC):
@@ -29,37 +25,23 @@ class IDataHandler(ABC):
 
     @classmethod
     def _get_file_extension(cls) -> str:
-        """
-        Get file extension for this particular datahandler
-        """
         raise NotImplementedError()
 
     @abstractclassmethod
     def ohlcv_get_available_data(cls, datadir: Path) -> ListPairsWithTimeframes:
         """
-        Returns a list of all pairs with ohlcv data available in this datadir
-        :param datadir: Directory to search for ohlcv files
-        :return: List of Tuples of (pair, timeframe)
+        저장위치에 ohlcv 데이터 확인
         """
-
     @abstractclassmethod
     def ohlcv_get_pairs(cls, datadir: Path, timeframe: str) -> List[str]:
         """
-        Returns a list of all pairs with ohlcv data available in this datadir
-        for the specified timeframe
-        :param datadir: Directory to search for ohlcv files
-        :param timeframe: Timeframe to search pairs for
-        :return: List of Pairs
+        각종목의 Ohlcv 데이터 확인
         """
 
     @abstractmethod
     def ohlcv_store(self, pair: str, timeframe: str, data: DataFrame) -> None:
         """
-        Store ohlcv data.
-        :param pair: Pair - used to generate filename
-        :param timeframe: Timeframe - used to generate filename
-        :param data: Dataframe containing OHLCV data
-        :return: None
+        데이터 저장
         """
 
     @abstractmethod
@@ -67,23 +49,13 @@ class IDataHandler(ABC):
                     timerange: Optional[TimeRange] = None,
                     ) -> DataFrame:
         """
-        Internal method used to load data for one pair from disk.
-        Implements the loading and conversion to a Pandas dataframe.
-        Timerange trimming and dataframe validation happens outside of this method.
-        :param pair: Pair to load data
-        :param timeframe: Timeframe (e.g. "5m")
-        :param timerange: Limit data to be loaded to this timerange.
-                        Optionally implemented by subclasses to avoid loading
-                        all data where possible.
-        :return: DataFrame with ohlcv data, or empty DataFrame
+        한종목당 한 파일로 저장
+        pandas 데이터 프레임 이용해서 변환
         """
 
     def ohlcv_purge(self, pair: str, timeframe: str) -> bool:
         """
-        Remove data for this pair
-        :param pair: Delete data for this pair.
-        :param timeframe: Timeframe (e.g. "5m")
-        :return: True when deleted, false if file did not exist.
+        모든데이터 지우기
         """
         filename = self._pair_data_filename(self._datadir, pair, timeframe)
         if filename.exists():
@@ -94,52 +66,36 @@ class IDataHandler(ABC):
     @abstractmethod
     def ohlcv_append(self, pair: str, timeframe: str, data: DataFrame) -> None:
         """
-        Append data to existing data structures
-        :param pair: Pair
-        :param timeframe: Timeframe this ohlcv data is for
-        :param data: Data to append.
+        데이터 붙이기
         """
 
     @abstractclassmethod
     def trades_get_pairs(cls, datadir: Path) -> List[str]:
         """
-        Returns a list of all pairs for which trade data is available in this
-        :param datadir: Directory to search for ohlcv files
-        :return: List of Pairs
+        불러올수있는 각 종목데이터 가져오기
         """
 
     @abstractmethod
     def trades_store(self, pair: str, data: TradeList) -> None:
         """
-        Store trades data (list of Dicts) to file
-        :param pair: Pair - used for filename
-        :param data: List of Lists containing trade data,
-                     column sequence as in DEFAULT_TRADES_COLUMNS
+        리스트와 딕셔너리 형태로 거래데이터 저장
         """
 
     @abstractmethod
     def trades_append(self, pair: str, data: TradeList):
         """
-        Append data to existing files
-        :param pair: Pair - used for filename
-        :param data: List of Lists containing trade data,
-                     column sequence as in DEFAULT_TRADES_COLUMNS
+        존재하는 데이터에 붙이기
         """
 
     @abstractmethod
     def _trades_load(self, pair: str, timerange: Optional[TimeRange] = None) -> TradeList:
         """
-        Load a pair from file, either .json.gz or .json
-        :param pair: Load trades for this pair
-        :param timerange: Timerange to load trades for - currently not implemented
-        :return: List of trades
+        json 현태로 종목리스트 반환
         """
 
     def trades_purge(self, pair: str) -> bool:
         """
-        Remove data for this pair
-        :param pair: Delete data for this pair.
-        :return: True when deleted, false if file did not exist.
+        지정 종목의 데이터 지우기
         """
         filename = self._pair_trades_filename(self._datadir, pair)
         if filename.exists():
@@ -149,11 +105,7 @@ class IDataHandler(ABC):
 
     def trades_load(self, pair: str, timerange: Optional[TimeRange] = None) -> TradeList:
         """
-        Load a pair from file, either .json.gz or .json
-        Removes duplicates in the process.
-        :param pair: Load trades for this pair
-        :param timerange: Timerange to load trades for - currently not implemented
-        :return: List of trades
+        데이터를  json 파일 형식으로 로드
         """
         return trades_remove_duplicates(self._trades_load(pair, timerange=timerange))
 
@@ -177,18 +129,9 @@ class IDataHandler(ABC):
                    warn_no_data: bool = True
                    ) -> DataFrame:
         """
-        Load cached candle (OHLCV) data for the given pair.
-
-        :param pair: Pair to load data for
-        :param timeframe: Timeframe (e.g. "5m")
-        :param timerange: Limit data to be loaded to this timerange
-        :param fill_missing: Fill missing values with "No action"-candles
-        :param drop_incomplete: Drop last candle assuming it may be incomplete.
-        :param startup_candles: Additional candles to load at the start of the period
-        :param warn_no_data: Log a warning message when no data is found
-        :return: DataFrame with ohlcv data, or empty DataFrame
+        각 캔들의 ohlcv 데이터 로드
         """
-        # Fix startup period
+        # 기간 재지정
         timerange_startup = deepcopy(timerange)
         if startup_candles > 0 and timerange_startup:
             timerange_startup.subtract_start(timeframe_to_seconds(timeframe) * startup_candles)
@@ -206,7 +149,7 @@ class IDataHandler(ABC):
                 if self._check_empty_df(pairdf, pair, timeframe, warn_no_data):
                     return pairdf
 
-            # incomplete candles should only be dropped if we didn't trim the end beforehand.
+            # 마지막 기간까지 불러오기
             pairdf = clean_ohlcv_dataframe(pairdf, timeframe,
                                            pair=pair,
                                            fill_missing=fill_missing,
@@ -217,43 +160,30 @@ class IDataHandler(ABC):
 
     def _check_empty_df(self, pairdf: DataFrame, pair: str, timeframe: str, warn_no_data: bool):
         """
-        Warn on empty dataframe
+        비어있는 데이터 경고표시
         """
         if pairdf.empty:
             if warn_no_data:
-                logger.warning(
-                    f'No history data for pair: "{pair}", timeframe: {timeframe}. '
-                    'Use `freqtrade download-data` to download the data'
-                )
+                None
             return True
         return False
 
     def _validate_pairdata(self, pair, pairdata: DataFrame, timeframe: str, timerange: TimeRange):
         """
-        Validates pairdata for missing data at start end end and logs warnings.
-        :param pairdata: Dataframe to validate
-        :param timerange: Timerange specified for start and end dates
+        비어있는데 데이터 표시
         """
 
         if timerange.starttype == 'date':
             start = datetime.fromtimestamp(timerange.startts, tz=timezone.utc)
-            if pairdata.iloc[0]['date'] > start:
-                logger.warning(f"Missing data at start for pair {pair} at {timeframe}, "
-                               f"data starts at {pairdata.iloc[0]['date']:%Y-%m-%d %H:%M:%S}")
+
         if timerange.stoptype == 'date':
             stop = datetime.fromtimestamp(timerange.stopts, tz=timezone.utc)
-            if pairdata.iloc[-1]['date'] < stop:
-                logger.warning(f"Missing data at end for pair {pair} at {timeframe}, "
-                               f"data ends at {pairdata.iloc[-1]['date']:%Y-%m-%d %H:%M:%S}")
+
 
 
 def get_datahandlerclass(datatype: str) -> Type[IDataHandler]:
     """
-    Get datahandler class.
-    Could be done using Resolvers, but since this may be called often and resolvers
-    are rather expensive, doing this directly should improve performance.
-    :param datatype: datatype to use.
-    :return: Datahandler class
+    모든 데이터 관리 클래스 불러오기
     """
 
     if datatype == 'json':
@@ -266,16 +196,11 @@ def get_datahandlerclass(datatype: str) -> Type[IDataHandler]:
         from .hdf5datahandler import HDF5DataHandler
         return HDF5DataHandler
     else:
-        raise ValueError(f"No datahandler for datatype {datatype} available.")
+        raise ValueError()
 
 
 def get_datahandler(datadir: Path, data_format: str = None,
                     data_handler: IDataHandler = None) -> IDataHandler:
-    """
-    :param datadir: Folder to save data
-    :param data_format: dataformat to use
-    :param data_handler: returns this datahandler if it exists or initializes a new one
-    """
 
     if not data_handler:
         HandlerClass = get_datahandlerclass(data_format or 'json')

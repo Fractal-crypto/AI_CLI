@@ -3,7 +3,7 @@ from enum import Enum
 
 class BacktestState(Enum):
     """
-    Bot application states
+     상태 정보
     """
     STARTUP = 1
     DATALOAD = 2

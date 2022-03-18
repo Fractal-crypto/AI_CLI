@@ -1,25 +1,15 @@
-# pragma pylint: disable=attribute-defined-outside-init
-
-"""
-This module load custom objects
-"""
 import importlib.util
 import inspect
-import logging
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Type, Union
 
 from threee.exceptions import OperationalException
 
 
-logger = logging.getLogger(__name__)
-
-
 class IResolver:
     """
-    This class contains all the logic to load custom classes
+    사용자 정의 클래스를 로드
     """
-    # Childclasses need to override this
     object_type: Type[Any]
     object_type_str: str
     user_subdir: Optional[str] = None
@@ -45,28 +35,15 @@ class IResolver:
     @classmethod
     def _get_valid_object(cls, module_path: Path, object_name: Optional[str],
                           enum_failed: bool = False) -> Iterator[Any]:
-        """
-        Generator returning objects with matching object_type and object_name in the path given.
-        :param module_path: absolute path to the module
-        :param object_name: Class name of the object
-        :param enum_failed: If True, will return None for modules which fail.
-            Otherwise, failing modules are skipped.
-        :return: generator containing tuple of matching objects
-             Tuple format: [Object, source]
-        """
-
-        # Generate spec based on absolute path
-        # Pass object_name as first argument to have logging print a reasonable name.
         spec = importlib.util.spec_from_file_location(object_name or "", str(module_path))
         if not spec:
             return iter([None])
 
         module = importlib.util.module_from_spec(spec)
         try:
-            spec.loader.exec_module(module)  # type: ignore # importlib does not use typehints
+            spec.loader.exec_module(module)
         except (ModuleNotFoundError, SyntaxError, ImportError, NameError) as err:
-            # Catch errors in case a specific module is not installed
-            logger.warning(f"Could not import {module_path} due to '{err}'")
+            pass
             if enum_failed:
                 return iter([None])
 
@@ -82,20 +59,12 @@ class IResolver:
     @classmethod
     def _search_object(cls, directory: Path, *, object_name: str, add_source: bool = False
                        ) -> Union[Tuple[Any, Path], Tuple[None, None]]:
-        """
-        Search for the objectname in the given directory
-        :param directory: relative or absolute directory path
-        :param object_name: ClassName of the object to load
-        :return: object class
-        """
-        logger.debug(f"Searching for {cls.object_type.__name__} {object_name} in '{directory}'")
         for entry in directory.iterdir():
-            # Only consider python files
+
             if entry.suffix != '.py':
-                logger.debug('Ignoring %s', entry)
+
                 continue
             if entry.is_symlink() and not entry.is_file():
-                logger.debug('Ignoring broken symlink %s', entry)
                 continue
             module_path = entry.resolve()
 
@@ -111,9 +80,6 @@ class IResolver:
     @classmethod
     def _load_object(cls, paths: List[Path], *, object_name: str, add_source: bool = False,
                      kwargs: dict = {}) -> Optional[Any]:
-        """
-        Try to load object from path list.
-        """
 
         for _path in paths:
             try:
@@ -121,26 +87,15 @@ class IResolver:
                                                            object_name=object_name,
                                                            add_source=add_source)
                 if module:
-                    logger.info(
-                        f"Using resolved {cls.object_type.__name__.lower()[1:]} {object_name} "
-                        f"from '{module_path}'...")
                     return module(**kwargs)
             except FileNotFoundError:
-                logger.warning('Path "%s" does not exist.', _path.resolve())
+                pass
 
         return None
 
     @classmethod
     def load_object(cls, object_name: str, config: dict, *, kwargs: dict,
                     extra_dir: Optional[str] = None) -> Any:
-        """
-        Search and loads the specified object as configured in hte child class.
-        :param object_name: name of the module to import
-        :param config: configuration dictionary
-        :param extra_dir: additional directory to search for the given pairlist
-        :raises: OperationalException if the class is invalid or does not exist.
-        :return: Object instance or None
-        """
 
         abs_paths = cls.build_search_paths(config,
                                            user_subdir=cls.user_subdir,
@@ -150,30 +105,17 @@ class IResolver:
                                         kwargs=kwargs)
         if found_object:
             return found_object
-        raise OperationalException(
-            f"Impossible to load {cls.object_type_str} '{object_name}'. This class does not exist "
-            "or contains Python code errors."
-        )
+
 
     @classmethod
     def search_all_objects(cls, directory: Path,
                            enum_failed: bool) -> List[Dict[str, Any]]:
-        """
-        Searches a directory for valid objects
-        :param directory: Path to search
-        :param enum_failed: If True, will return None for modules which fail.
-            Otherwise, failing modules are skipped.
-        :return: List of dicts containing 'name', 'class' and 'location' entries
-        """
-        logger.debug(f"Searching for {cls.object_type.__name__} '{directory}'")
         objects = []
         for entry in directory.iterdir():
-            # Only consider python files
             if entry.suffix != '.py':
-                logger.debug('Ignoring %s', entry)
+
                 continue
             module_path = entry.resolve()
-            logger.debug(f"Path {module_path}")
             for obj in cls._get_valid_object(module_path, object_name=None,
                                              enum_failed=enum_failed):
                 objects.append(

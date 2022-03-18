@@ -10,16 +10,13 @@ from threee.mixins import LoggingMixin
 from threee.persistence import LocalTrade
 
 
-logger = logging.getLogger(__name__)
-
 ProtectionReturn = Tuple[bool, Optional[datetime], Optional[str]]
 
 
 class IProtection(LoggingMixin, ABC):
 
-    # Can globally stop the bot
+
     has_global_stop: bool = False
-    # Can stop trading for one pair
     has_local_stop: bool = False
 
     def __init__(self, config: Dict[str, Any], protection_config: Dict[str, Any]) -> None:
@@ -42,7 +39,7 @@ class IProtection(LoggingMixin, ABC):
             self._lookback_period_candles = None
             self._lookback_period = int(protection_config.get('lookback_period', 60))
 
-        LoggingMixin.__init__(self, logger)
+        LoggingMixin.__init__(self, None)
 
     @property
     def name(self) -> str:
@@ -50,9 +47,6 @@ class IProtection(LoggingMixin, ABC):
 
     @property
     def stop_duration_str(self) -> str:
-        """
-        Output configured stop duration in either candles or minutes
-        """
         if self._stop_duration_candles:
             return (f"{self._stop_duration_candles} "
                     f"{plural(self._stop_duration_candles, 'candle', 'candles')}")
@@ -62,9 +56,6 @@ class IProtection(LoggingMixin, ABC):
 
     @property
     def lookback_period_str(self) -> str:
-        """
-        Output configured lookback period in either candles or minutes
-        """
         if self._lookback_period_candles:
             return (f"{self._lookback_period_candles} "
                     f"{plural(self._lookback_period_candles, 'candle', 'candles')}")
@@ -74,34 +65,20 @@ class IProtection(LoggingMixin, ABC):
 
     @abstractmethod
     def short_desc(self) -> str:
-        """
-        Short method description - used for startup-messages
-        -> Please overwrite in subclasses
-        """
-
+        pass
     @abstractmethod
     def global_stop(self, date_now: datetime) -> ProtectionReturn:
-        """
-        Stops trading (position entering) for all pairs
-        This must evaluate to true for the whole period of the "cooldown period".
-        """
+        pass
 
     @abstractmethod
     def stop_per_pair(self, pair: str, date_now: datetime) -> ProtectionReturn:
-        """
-        Stops trading (position entering) for this pair
-        This must evaluate to true for the whole period of the "cooldown period".
-        :return: Tuple of [bool, until, reason].
-            If true, this pair will be locked with <reason> until <until>
-        """
+        pass
 
     @staticmethod
     def calculate_lock_end(trades: List[LocalTrade], stop_minutes: int) -> datetime:
-        """
-        Get lock end time
-        """
+
         max_date: datetime = max([trade.close_date for trade in trades if trade.close_date])
-        # comming from Database, tzinfo is not set.
+
         if max_date.tzinfo is None:
             max_date = max_date.replace(tzinfo=timezone.utc)
 

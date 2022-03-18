@@ -16,9 +16,6 @@ from threee.misc import get_backtest_metadata_filename, json_load
 from threee.persistence import LocalTrade, Trade, init_db
 
 
-logger = logging.getLogger(__name__)
-
-# Newest format
 BT_DATA_COLUMNS = ['pair', 'stake_amount', 'amount', 'open_date', 'close_date',
                    'open_rate', 'close_rate',
                    'fee_open', 'fee_close', 'trade_duration',
@@ -29,80 +26,35 @@ BT_DATA_COLUMNS = ['pair', 'stake_amount', 'amount', 'open_date', 'close_date',
 
 def get_latest_optimize_filename(directory: Union[Path, str], variant: str) -> str:
     """
-    Get latest backtest export based on '.last_result.json'.
-    :param directory: Directory to search for last result
-    :param variant: 'backtest' or 'hyperopt' - the method to return
-    :return: string containing the filename of the latest backtest result
-    :raises: ValueError in the following cases:
-        * Directory does not exist
-        * `directory/.last_result.json` does not exist
-        * `directory/.last_result.json` has the wrong content
+    마지막으로 최적화한 json파일 반환
     """
     if isinstance(directory, str):
         directory = Path(directory)
-    if not directory.is_dir():
-        raise ValueError(f"Directory '{directory}' does not exist.")
     filename = directory / LAST_BT_RESULT_FN
 
-    if not filename.is_file():
-        raise ValueError(
-            f"Directory '{directory}' does not seem to contain backtest statistics yet.")
 
     with filename.open() as file:
         data = json_load(file)
-
-    if f'latest_{variant}' not in data:
-        raise ValueError(f"Invalid '{LAST_BT_RESULT_FN}' format.")
 
     return data[f'latest_{variant}']
 
 
 def get_latest_backtest_filename(directory: Union[Path, str]) -> str:
-    """
-    Get latest backtest export based on '.last_result.json'.
-    :param directory: Directory to search for last result
-    :return: string containing the filename of the latest backtest result
-    :raises: ValueError in the following cases:
-        * Directory does not exist
-        * `directory/.last_result.json` does not exist
-        * `directory/.last_result.json` has the wrong content
-    """
     return get_latest_optimize_filename(directory, 'backtest')
 
 
 def get_latest_hyperopt_filename(directory: Union[Path, str]) -> str:
-    """
-    Get latest hyperopt export based on '.last_result.json'.
-    :param directory: Directory to search for last result
-    :return: string containing the filename of the latest hyperopt result
-    :raises: ValueError in the following cases:
-        * Directory does not exist
-        * `directory/.last_result.json` does not exist
-        * `directory/.last_result.json` has the wrong content
-    """
     try:
         return get_latest_optimize_filename(directory, 'hyperopt')
     except ValueError:
-        # Return default (legacy) pickle filename
         return 'hyperopt_results.pickle'
 
 
 def get_latest_hyperopt_file(directory: Union[Path, str], predef_filename: str = None) -> Path:
-    """
-    Get latest hyperopt export based on '.last_result.json'.
-    :param directory: Directory to search for last result
-    :return: string containing the filename of the latest hyperopt result
-    :raises: ValueError in the following cases:
-        * Directory does not exist
-        * `directory/.last_result.json` does not exist
-        * `directory/.last_result.json` has the wrong content
-    """
+
     if isinstance(directory, str):
         directory = Path(directory)
     if predef_filename:
-        if Path(predef_filename).is_absolute():
-            raise OperationalException(
-                "--hyperopt-filename expects only the filename, not an absolute path.")
         return directory / predef_filename
     return directory / get_latest_hyperopt_filename(directory)
 

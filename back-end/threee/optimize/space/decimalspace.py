@@ -13,7 +13,6 @@ class SKDecimal(Integer):
 
         _low = int(low * self.pow_ten)
         _high = int(high * self.pow_ten)
-        # trunc to precision to avoid points out of space
         self.low_orig = round(_low * self.pow_dot_one, self.decimals)
         self.high_orig = round(_high * self.pow_dot_one, self.decimals)
 
@@ -33,5 +32,4 @@ class SKDecimal(Integer):
 
     def inverse_transform(self, Xt):
         res = super().inverse_transform(Xt)
-        # equivalent to [round(x * pow(0.1, self.decimals), self.decimals) for x in res]
         return [int(v) / self.pow_ten for v in res]

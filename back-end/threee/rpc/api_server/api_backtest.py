@@ -13,23 +13,16 @@ from threee.rpc.api_server.webserver import ApiServer
 from threee.rpc.rpc import RPCException
 
 
-logger = logging.getLogger(__name__)
-
-# Private API, protected by authentication
 router = APIRouter()
 
 
 @router.post('/backtest', response_model=BacktestResponse, tags=['webserver', 'backtest'])
-# flake8: noqa: C901
 async def api_start_backtest(bt_settings: BacktestRequest, background_tasks: BackgroundTasks,
                              config=Depends(get_config), ws_mode=Depends(is_webserver_mode)):
-    """Start backtesting if not done so already"""
-    if ApiServer._bgtask_running:
-        raise RPCException('Bot Background task already running')
+
 
     btconfig = deepcopy(config)
     settings = dict(bt_settings)
-    # Pydantic models will contain all keys, but non-provided ones are None
     for setting in settings.keys():
         if settings[setting] is not None:
             btconfig[setting] = settings[setting]
@@ -38,18 +31,15 @@ async def api_start_backtest(bt_settings: BacktestRequest, background_tasks: Bac
     except ValueError:
         pass
 
-    # Force dry-run for backtesting
     btconfig['dry_run'] = True
 
-    # Start backtesting
-    # Initialize backtesting object
     def run_backtest():
         from threee.optimize.optimize_reports import (generate_backtest_stats,
                                                          store_backtest_stats)
         from threee.resolvers import StrategyResolver
         asyncio.set_event_loop(asyncio.new_event_loop())
         try:
-            # Reload strategy
+
             lastconfig = ApiServer._bt_last_config
             strat = StrategyResolver.load_strategy(btconfig)
             validate_config_consistency(btconfig)
@@ -66,7 +56,6 @@ async def api_start_backtest(bt_settings: BacktestRequest, background_tasks: Bac
             else:
                 ApiServer._bt.config = btconfig
                 ApiServer._bt.init_backtest()
-            # Only reload data if timeframe changed.
             if (
                 not ApiServer._bt_data
                 or not ApiServer._bt_timerange
@@ -87,8 +76,7 @@ async def api_start_backtest(bt_settings: BacktestRequest, background_tasks: Bac
             ApiServer._bt.abort = False
             if (ApiServer._bt.results and
                     strat.get_strategy_name() in ApiServer._bt.results['strategy']):
-                # When previous result hash matches - reuse that result and skip backtesting.
-                logger.info(f'Reusing result of previous backtest for {strat.get_strategy_name()}')
+                pass
             else:
                 min_date, max_date = ApiServer._bt.backtest_one_strategy(
                     strat, ApiServer._bt_data, ApiServer._bt_timerange)
@@ -100,10 +88,7 @@ async def api_start_backtest(bt_settings: BacktestRequest, background_tasks: Bac
             if btconfig.get('export', 'none') == 'trades':
                 store_backtest_stats(btconfig['exportfilename'], ApiServer._bt.results)
 
-            logger.info("Backtest finished.")
-
         except DependencyException as e:
-            logger.info(f"Backtesting caused an error: {e}")
             pass
         finally:
             ApiServer._bgtask_running = False
@@ -122,10 +107,6 @@ async def api_start_backtest(bt_settings: BacktestRequest, background_tasks: Bac
 
 @router.get('/backtest', response_model=BacktestResponse, tags=['webserver', 'backtest'])
 def api_get_backtest(ws_mode=Depends(is_webserver_mode)):
-    """
-    Get backtesting result.
-    Returns Result after backtesting has been ran.
-    """
     from threee.persistence import LocalTrade
     if ApiServer._bgtask_running:
         return {
@@ -172,7 +153,7 @@ def api_delete_backtest(ws_mode=Depends(is_webserver_mode)):
         ApiServer._bt = None
         del ApiServer._bt_data
         ApiServer._bt_data = None
-        logger.info("Backtesting reset")
+    
     return {
         "status": "reset",
         "running": False,

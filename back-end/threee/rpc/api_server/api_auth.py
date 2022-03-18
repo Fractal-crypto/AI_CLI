@@ -16,7 +16,7 @@ router_login = APIRouter()
 
 
 def verify_auth(api_config, username: str, password: str):
-    """Verify username/password"""
+    """사용자 이름/비밀번호 확인"""
     return (secrets.compare_digest(username, api_config.get('username')) and
             secrets.compare_digest(password, api_config.get('password')))
 

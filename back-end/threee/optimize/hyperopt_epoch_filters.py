@@ -1,15 +1,10 @@
-import logging
 from typing import List
 
 from threee.exceptions import OperationalException
 
-
-logger = logging.getLogger(__name__)
-
-
 def hyperopt_filter_epochs(epochs: List, filteroptions: dict, log: bool = True) -> List:
     """
-    Filter our items from the list of hyperopt results
+    hyperopt 결과 목록에서 항목 필터링
     """
     if filteroptions['only_best']:
         epochs = [x for x in epochs if x['is_best']]
@@ -24,18 +19,11 @@ def hyperopt_filter_epochs(epochs: List, filteroptions: dict, log: bool = True) 
     epochs = _hyperopt_filter_epochs_profit(epochs, filteroptions)
 
     epochs = _hyperopt_filter_epochs_objective(epochs, filteroptions)
-    if log:
-        logger.info(f"{len(epochs)} " +
-                    ("best " if filteroptions['only_best'] else "") +
-                    ("profitable " if filteroptions['only_profitable'] else "") +
-                    "epochs found.")
+
     return epochs
 
 
 def _hyperopt_filter_epochs_trade(epochs: List, trade_count: int):
-    """
-    Filter epochs with trade-counts > trades
-    """
     return [
         x for x in epochs if x['results_metrics'].get('total_trades', 0) > trade_count
     ]
@@ -61,9 +49,7 @@ def _hyperopt_filter_epochs_duration(epochs: List, filteroptions: dict) -> List:
         if 'holding_avg_s' in x['results_metrics']:
             avg = x['results_metrics']['holding_avg_s']
             return avg // 60
-        raise OperationalException(
-            "Holding-average not available. Please omit the filter on average time, "
-            "or rerun hyperopt with this version")
+        pass
 
     if filteroptions['filter_min_avg_time'] is not None:
         epochs = _hyperopt_filter_epochs_trade(epochs, 0)

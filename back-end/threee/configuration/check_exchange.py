@@ -17,17 +17,6 @@ def check_exchange(config: Dict[str, Any], check_for_bad: bool = True) -> bool:
         return True
 
     exchange = config.get('exchange', {}).get('name').lower()
-    # if not exchange:
-    #     raise OperationalException('ExchangeError')
-    #
-    # if not is_exchange_known_ccxt(exchange):
-    #     raise OperationalException('ExchangeError')
-    #
-    # valid, reason = validate_exchange(exchange)
-    # if not valid:
-    #     if check_for_bad:
-    #         raise OperationalException('ExchangeError')
-    #     else:
-    #         None
+    
 
     return True

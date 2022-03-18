@@ -1,16 +1,11 @@
-# pragma pylint: disable=too-few-public-methods
-
-"""
-bot constants
-"""
 from typing import List, Tuple
 
 
 DEFAULT_CONFIG = 'config.json'
 DEFAULT_EXCHANGE = 'bittrex'
-PROCESS_THROTTLE_SECS = 5  # sec
-HYPEROPT_EPOCH = 100  # epochs
-RETRY_TIMEOUT = 30  # sec
+PROCESS_THROTTLE_SECS = 5
+HYPEROPT_EPOCH = 100
+RETRY_TIMEOUT = 30
 TIMEOUT_UNITS = ['minutes', 'seconds']
 EXPORT_OPTIONS = ['none', 'trades']
 DEFAULT_DB_PROD_URL = 'sqlite:///tradesv3.sqlite'
@@ -38,10 +33,8 @@ BACKTEST_CACHE_AGE = ['none', 'day', 'week', 'month']
 BACKTEST_CACHE_DEFAULT = 'day'
 DRY_RUN_WALLET = 1000
 DATETIME_PRINT_FORMAT = '%Y-%m-%d %H:%M:%S'
-MATH_CLOSE_PREC = 1e-14  # Precision used for float comparisons
+MATH_CLOSE_PREC = 1e-14
 DEFAULT_DATAFRAME_COLUMNS = ['date', 'open', 'high', 'low', 'close', 'volume']
-# Don't modify sequence of DEFAULT_TRADES_COLUMNS
-# it has wide consequences for stored trades files
 DEFAULT_TRADES_COLUMNS = ['timestamp', 'id', 'type', 'side', 'price', 'amount', 'cost']
 
 LAST_BT_RESULT_FN = '.last_result.json'
@@ -58,9 +51,7 @@ ENV_VAR_PREFIX = 'FREQTRADE__'
 
 NON_OPEN_EXCHANGE_STATES = ('cancelled', 'canceled', 'closed', 'expired')
 
-# Define decimals per coin for outputs
-# Only used for outputs.
-DECIMAL_PER_COIN_FALLBACK = 3  # Should be low to avoid listing all possible FIAT's
+DECIMAL_PER_COIN_FALLBACK = 3
 DECIMALS_PER_COIN = {
     'BTC': 8,
     'ETH': 5,
@@ -71,7 +62,6 @@ DUST_PER_COIN = {
     'ETH': 0.01
 }
 
-# Source files with destination directories within user-directory
 USER_DATA_FILES = {
     'sample_strategy.py': USERPATH_STRATEGIES,
     'sample_hyperopt_loss.py': USERPATH_HYPEROPTS,
@@ -100,7 +90,6 @@ MINIMAL_CONFIG = {
     }
 }
 
-# Required json-schema for user specified config
 CONF_SCHEMA = {
     'type': 'object',
     'properties': {
@@ -474,7 +463,6 @@ CANCEL_REASON = {
     "FORCE_SELL": "forcesold",
 }
 
-# List of pairs with their timeframes
 PairWithTimeframe = Tuple[str, str]
 ListPairsWithTimeframes = List[PairWithTimeframe]
 

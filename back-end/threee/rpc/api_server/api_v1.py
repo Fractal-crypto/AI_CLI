@@ -24,38 +24,27 @@ from threee.rpc.api_server.deps import get_config, get_exchange, get_rpc, get_rp
 from threee.rpc.rpc import RPCException
 
 
-logger = logging.getLogger(__name__)
-
-# API version
-# Pre-1.1, no version was provided
-# Version increments should happen in "small" steps (1.1, 1.12, ...) unless big changes happen.
-# 1.11: forcebuy and forcesell accept ordertype
-# 1.12: add blacklist delete endpoint
-# 1.13: forcebuy supports stake_amount
-# 1.14: Add entry/exit orders to trade response
 API_VERSION = 1.14
 
-# Public API, requires no auth.
+
 router_public = APIRouter()
-# Private API, protected by authentication
+
 router = APIRouter()
 
 
 @router_public.get('/ping', response_model=Ping)
 def ping():
-    """simple ping"""
+
     return {"status": "pong"}
 
 
 @router.get('/version', response_model=Version, tags=['info'])
 def version():
-    """ Bot Version info"""
     return {"version": __version__}
 
 
 @router.get('/balance', response_model=Balances, tags=['info'])
 def balance(rpc: RPC = Depends(get_rpc), config=Depends(get_config)):
-    """Account Balances"""
     return rpc._rpc_balance(config['stake_currency'], config.get('fiat_display_currency', ''),)
 
 
@@ -95,8 +84,6 @@ def status(rpc: RPC = Depends(get_rpc)):
         return []
 
 
-# Using the responsemodel here will cause a ~100% increase in response time (from 1s to 2s)
-# on big databases. Correct response model: response_model=TradeResponse,
 @router.get('/trades', tags=['info', 'trading'])
 def trades(limit: int = 500, offset: int = 0, rpc: RPC = Depends(get_rpc)):
     return rpc._rpc_trade_history(limit, offset=offset, order_by_id=True)
@@ -114,8 +101,6 @@ def trade(tradeid: int = 0, rpc: RPC = Depends(get_rpc)):
 def trades_delete(tradeid: int, rpc: RPC = Depends(get_rpc)):
     return rpc._rpc_delete(tradeid)
 
-
-# TODO: Missing response model
 @router.get('/edge', tags=['info'])
 def edge(rpc: RPC = Depends(get_rpc)):
     return rpc._rpc_edge()
@@ -224,8 +209,6 @@ def pair_candles(
 @router.get('/pair_history', response_model=PairHistory, tags=['candle data'])
 def pair_history(pair: str, timeframe: str, timerange: str, strategy: str,
                  config=Depends(get_config), exchange=Depends(get_exchange)):
-    # The initial call to this endpoint can be slow, as it may need to initialize
-    # the exchange class.
     config = deepcopy(config)
     config.update({
         'strategy': strategy,

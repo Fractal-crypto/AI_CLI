@@ -1,9 +1,3 @@
-# pragma pylint: disable=attribute-defined-outside-init
-
-"""
-This module load custom strategies
-"""
-import logging
 import tempfile
 from base64 import urlsafe_b64decode
 from inspect import getfullargspec
@@ -16,13 +10,7 @@ from threee.resolvers import IResolver
 from threee.strategy.interface import IStrategy
 
 
-logger = logging.getLogger(__name__)
-
-
 class StrategyResolver(IResolver):
-    """
-    This class contains the logic to load custom strategy class
-    """
     object_type = IStrategy
     object_type_str = "Strategy"
     user_subdir = USERPATH_STRATEGIES
@@ -30,10 +18,6 @@ class StrategyResolver(IResolver):
 
     @staticmethod
     def load_strategy(config: Dict[str, Any] = None) -> IStrategy:
-        """
-        Load the custom class from config parameter
-        :param config: configuration dictionary or None
-        """
         config = config or {}
 
         if not config.get('strategy'):
@@ -46,15 +30,11 @@ class StrategyResolver(IResolver):
             extra_dir=config.get('strategy_path'))
 
         if hasattr(strategy, 'ticker_interval') and not hasattr(strategy, 'timeframe'):
-            # Assign ticker_interval to timeframe to keep compatibility
             if 'timeframe' not in config:
-                logger.warning(
-                    "DEPRECATED: Please migrate to using 'timeframe' instead of 'ticker_interval'."
-                )
+                pass
                 strategy.timeframe = strategy.ticker_interval
 
         if strategy._ft_params_from_file:
-            # Set parameters from Hyperopt results file
             params = strategy._ft_params_from_file
             strategy.minimal_roi = params.get('roi', getattr(strategy, 'minimal_roi', {}))
 
@@ -72,9 +52,6 @@ class StrategyResolver(IResolver):
                 'trailing_only_offset_is_reached',
                 getattr(strategy, 'trailing_only_offset_is_reached', 0.0))
 
-        # Set attributes
-        # Check if we need to override configuration
-        #             (Attribute name,                    default,     subkey)
         attributes = [("minimal_roi",                     {"0": 10.0}),
                       ("timeframe",                       None),
                       ("stoploss",                        None),
@@ -104,10 +81,7 @@ class StrategyResolver(IResolver):
             StrategyResolver._override_attribute_helper(strategy, config,
                                                         attribute, default)
 
-        # Loop this list again to have output combined
-        for attribute, _ in attributes:
-            if attribute in config:
-                logger.info("Strategy using %s: %s", attribute, config[attribute])
+
 
         StrategyResolver._normalize_attributes(strategy)
 
@@ -117,39 +91,26 @@ class StrategyResolver(IResolver):
     @staticmethod
     def _override_attribute_helper(strategy, config: Dict[str, Any],
                                    attribute: str, default: Any):
-        """
-        Override attributes in the strategy.
-        Prevalence:
-        - Configuration
-        - Strategy
-        - default (if not None)
-        """
         if (attribute in config
                 and not isinstance(getattr(type(strategy), attribute, None), property)):
-            # Ensure Properties are not overwritten
+
             setattr(strategy, attribute, config[attribute])
-            logger.info("Override strategy '%s' with value in config file: %s.",
-                        attribute, config[attribute])
+
         elif hasattr(strategy, attribute):
             val = getattr(strategy, attribute)
-            # None's cannot exist in the config, so do not copy them
+
             if val is not None:
                 config[attribute] = val
-        # Explicitly check for None here as other "falsy" values are possible
+
         elif default is not None:
             setattr(strategy, attribute, default)
             config[attribute] = default
 
     @staticmethod
     def _normalize_attributes(strategy: IStrategy) -> IStrategy:
-        """
-        Normalize attributes to have the correct type.
-        """
-        # Assign deprecated variable - to not break users code relying on this.
         if hasattr(strategy, 'timeframe'):
             strategy.ticker_interval = strategy.timeframe
 
-        # Sort and apply type conversions
         if hasattr(strategy, 'minimal_roi'):
             strategy.minimal_roi = dict(sorted(
                 {int(key): value for (key, value) in strategy.minimal_roi.items()}.items(),
@@ -171,20 +132,14 @@ class StrategyResolver(IResolver):
     @staticmethod
     def _load_strategy(strategy_name: str,
                        config: dict, extra_dir: Optional[str] = None) -> IStrategy:
-        """
-        Search and loads the specified strategy.
-        :param strategy_name: name of the module to import
-        :param config: configuration for the strategy
-        :param extra_dir: additional directory to search for the given strategy
-        :return: Strategy instance or None
-        """
+
 
         abs_paths = StrategyResolver.build_search_paths(config,
                                                         user_subdir=USERPATH_STRATEGIES,
                                                         extra_dir=extra_dir)
 
         if ":" in strategy_name:
-            logger.info("loading base64 encoded strategy")
+
             strat = strategy_name.split(":")
 
             if len(strat) == 2:
@@ -196,7 +151,7 @@ class StrategyResolver(IResolver):
 
                 strategy_name = strat[0]
 
-                # register temp path with the bot
+
                 abs_paths.insert(0, temp.resolve())
 
         strategy = StrategyResolver._load_object(paths=abs_paths,
@@ -215,7 +170,4 @@ class StrategyResolver(IResolver):
 
             return strategy
 
-        raise OperationalException(
-            f"Impossible to load Strategy '{strategy_name}'. This class does not exist "
-            "or contains Python code errors."
-        )
+        
