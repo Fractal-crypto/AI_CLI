@@ -15,17 +15,7 @@ from threee.misc import (decimals_per_coin, file_dump_json, get_backtest_metadat
                             round_coin_value)
 
 
-logger = logging.getLogger(__name__)
-
-
 def store_backtest_stats(recordfilename: Path, stats: Dict[str, DataFrame]) -> None:
-    """
-    Stores backtest results
-    :param recordfilename: Path object, which can either be a filename or a directory.
-        Filenames will be appended with a timestamp right before the suffix
-        while for directories, <directory>/backtest-result-<datetime>.json will be used as filename
-    :param stats: Dataframe containing the backtesting statistics
-    """
     if recordfilename.is_dir():
         filename = (recordfilename /
                     f'backtest-result-{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.json')
@@ -35,7 +25,6 @@ def store_backtest_stats(recordfilename: Path, stats: Dict[str, DataFrame]) -> N
             f'{recordfilename.stem}-{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}'
         ).with_suffix(recordfilename.suffix)
 
-    # Store metadata separately.
     file_dump_json(get_backtest_metadata_filename(filename), stats['metadata'])
     del stats['metadata']
 
@@ -46,17 +35,11 @@ def store_backtest_stats(recordfilename: Path, stats: Dict[str, DataFrame]) -> N
 
 
 def _get_line_floatfmt(stake_currency: str) -> List[str]:
-    """
-    Generate floatformat (goes in line with _generate_result_line())
-    """
     return ['s', 'd', '.2f', '.2f', f'.{decimals_per_coin(stake_currency)}f',
             '.2f', 'd', 's', 's']
 
 
 def _get_line_header(first_column: str, stake_currency: str, direction: str = 'Buys') -> List[str]:
-    """
-    Generate header lines (goes in line with _generate_result_line())
-    """
     return [first_column, direction, 'Avg Profit %', 'Cum Profit %',
             f'Tot Profit {stake_currency}', 'Tot Profit %', 'Avg Duration',
             'Win  Draw  Loss  Win%']
@@ -73,11 +56,7 @@ def _generate_wins_draws_losses(wins, draws, losses):
 
 
 def _generate_result_line(result: DataFrame, starting_balance: int, first_column: str) -> Dict:
-    """
-    Generate one result dict, with "first_column" as key.
-    """
     profit_sum = result['profit_ratio'].sum()
-    # (end-capital - starting capital) / starting capital
     profit_total = result['profit_abs'].sum() / starting_balance
 
     return {
@@ -93,12 +72,6 @@ def _generate_result_line(result: DataFrame, starting_balance: int, first_column
         'duration_avg': str(timedelta(
                             minutes=round(result['trade_duration'].mean()))
                             ) if not result.empty else '0:00',
-        # 'duration_max': str(timedelta(
-        #                     minutes=round(result['trade_duration'].max()))
-        #                     ) if not result.empty else '0:00',
-        # 'duration_min': str(timedelta(
-        #                     minutes=round(result['trade_duration'].min()))
-        #                     ) if not result.empty else '0:00',
         'wins': len(result[result['profit_abs'] > 0]),
         'draws': len(result[result['profit_abs'] == 0]),
         'losses': len(result[result['profit_abs'] < 0]),
@@ -107,15 +80,6 @@ def _generate_result_line(result: DataFrame, starting_balance: int, first_column
 
 def generate_pair_metrics(pairlist: List[str], stake_currency: str, starting_balance: int,
                           results: DataFrame, skip_nan: bool = False) -> List[Dict]:
-    """
-    Generates and returns a list  for the given backtest data and the results dataframe
-    :param pairlist: Pairlist used
-    :param stake_currency: stake-currency - used to correctly name headers
-    :param starting_balance: Starting balance
-    :param results: Dataframe containing the backtest results
-    :param skip_nan: Print "left open" open trades
-    :return: List of Dicts containing the metrics per pair
-    """
 
     tabular_data = []
 
@@ -126,10 +90,8 @@ def generate_pair_metrics(pairlist: List[str], stake_currency: str, starting_bal
 
         tabular_data.append(_generate_result_line(result, starting_balance, pair))
 
-    # Sort by total profit %:
     tabular_data = sorted(tabular_data, key=lambda k: k['profit_total_abs'], reverse=True)
 
-    # Append Total
     tabular_data.append(_generate_result_line(results, starting_balance, 'TOTAL'))
     return tabular_data
 
@@ -139,11 +101,7 @@ def generate_tag_metrics(tag_type: str,
                          results: DataFrame,
                          skip_nan: bool = False) -> List[Dict]:
     """
-    Generates and returns a list of metrics for the given tag trades and the results dataframe
-    :param starting_balance: Starting balance
-    :param results: Dataframe containing the backtest results
-    :param skip_nan: Print "left open" open trades
-    :return: List of Dicts containing the metrics per pair
+    주어진 태그 거래 및 결과 데이터 프레임에 대한 메트릭 목록을 생성하고 반환
     """
 
     tabular_data = []
@@ -156,10 +114,8 @@ def generate_tag_metrics(tag_type: str,
 
             tabular_data.append(_generate_result_line(result, starting_balance, tag))
 
-        # Sort by total profit %:
         tabular_data = sorted(tabular_data, key=lambda k: k['profit_total_abs'], reverse=True)
 
-        # Append Total
         tabular_data.append(_generate_result_line(results, starting_balance, 'TOTAL'))
         return tabular_data
     else:
@@ -168,10 +124,7 @@ def generate_tag_metrics(tag_type: str,
 
 def generate_sell_reason_stats(max_open_trades: int, results: DataFrame) -> List[Dict]:
     """
-    Generate small table outlining Backtest results
-    :param max_open_trades: Max_open_trades parameter
-    :param results: Dataframe containing the backtest result for one strategy
-    :return: List of Dicts containing the metrics per Sell reason
+    백테스트 결과를 요약
     """
     tabular_data = []
 
@@ -203,15 +156,12 @@ def generate_sell_reason_stats(max_open_trades: int, results: DataFrame) -> List
 
 def generate_strategy_comparison(bt_stats: Dict) -> List[Dict]:
     """
-    Generate summary per strategy
-    :param bt_stats: Dict of <Strategyname: DataFrame> containing results for all strategies
-    :return: List of Dicts containing the metrics per Strategy
+    전략별 요약 생성
     """
 
     tabular_data = []
     for strategy, result in bt_stats.items():
         tabular_data.append(deepcopy(result['results_per_pair'][-1]))
-        # Update "key" to strategy (results_per_pair has it as "Total").
         tabular_data[-1]['key'] = strategy
         tabular_data[-1]['max_drawdown_account'] = result['max_drawdown_account']
         tabular_data[-1]['max_drawdown_abs'] = round_coin_value(
@@ -238,10 +188,8 @@ def generate_edge_table(results: dict) -> str:
                 result[1].nb_trades,
                 round(result[1].avg_trade_duration)
             ])
-
-    # Ignore type as floatfmt does allow tuples but mypy does not know that
     return tabulate(tabular_data, headers=headers,
-                    floatfmt=floatfmt, tablefmt="orgtbl", stralign="right")  # type: ignore
+                    floatfmt=floatfmt, tablefmt="orgtbl", stralign="right")
 
 
 def _get_resample_from_period(period: str) -> str:
@@ -357,16 +305,6 @@ def generate_strategy_stats(pairlist: List[str],
                             min_date: datetime, max_date: datetime,
                             market_change: float
                             ) -> Dict[str, Any]:
-    """
-    :param pairlist: List of pairs to backtest
-    :param strategy: Strategy name
-    :param content: Backtest result data in the format:
-                    {'results: results, 'config: config}}.
-    :param min_date: Backtest start date
-    :param max_date: Backtest end date
-    :param market_change: float indicating the market change
-    :return: Dictionary containing results per strategy and a strategy summary.
-    """
     results: Dict[str, DataFrame] = content['results']
     if not isinstance(results, DataFrame):
         return {}
@@ -540,19 +478,7 @@ def generate_backtest_stats(btdata: Dict[str, DataFrame],
     result['strategy_comparison'] = strategy_results
 
     return result
-
-
-###
-# Start output section
-###
-
 def text_table_bt_results(pair_results: List[Dict[str, Any]], stake_currency: str) -> str:
-    """
-    Generates and returns a text table for the given backtest data and the results dataframe
-    :param pair_results: List of Dictionaries - one entry per pair + final TOTAL row
-    :param stake_currency: stake-currency - used to correctly name headers
-    :return: pretty printed table with tabulate as string
-    """
 
     headers = _get_line_header('Pair', stake_currency)
     floatfmt = _get_line_floatfmt(stake_currency)
@@ -561,18 +487,11 @@ def text_table_bt_results(pair_results: List[Dict[str, Any]], stake_currency: st
         t['profit_total_pct'], t['duration_avg'],
         _generate_wins_draws_losses(t['wins'], t['draws'], t['losses'])
     ] for t in pair_results]
-    # Ignore type as floatfmt does allow tuples but mypy does not know that
     return tabulate(output, headers=headers,
                     floatfmt=floatfmt, tablefmt="orgtbl", stralign="right")
 
 
 def text_table_sell_reason(sell_reason_stats: List[Dict[str, Any]], stake_currency: str) -> str:
-    """
-    Generate small table outlining Backtest results
-    :param sell_reason_stats: Sell reason metrics
-    :param stake_currency: Stakecurrency used
-    :return: pretty printed table with tabulate as string
-    """
     headers = [
         'Sell Reason',
         'Sells',
@@ -594,12 +513,6 @@ def text_table_sell_reason(sell_reason_stats: List[Dict[str, Any]], stake_curren
 
 
 def text_table_tags(tag_type: str, tag_results: List[Dict[str, Any]], stake_currency: str) -> str:
-    """
-    Generates and returns a text table for the given backtest data and the results dataframe
-    :param pair_results: List of Dictionaries - one entry per pair + final TOTAL row
-    :param stake_currency: stake-currency - used to correctly name headers
-    :return: pretty printed table with tabulate as string
-    """
     if(tag_type == "buy_tag"):
         headers = _get_line_header("TAG", stake_currency)
     else:
@@ -619,19 +532,12 @@ def text_table_tags(tag_type: str, tag_results: List[Dict[str, Any]], stake_curr
                 t['wins'],
                 t['draws'],
                 t['losses'])] for t in tag_results]
-    # Ignore type as floatfmt does allow tuples but mypy does not know that
     return tabulate(output, headers=headers,
                     floatfmt=floatfmt, tablefmt="orgtbl", stralign="right")
 
 
 def text_table_periodic_breakdown(days_breakdown_stats: List[Dict[str, Any]],
                                   stake_currency: str, period: str) -> str:
-    """
-    Generate small table with Backtest results by days
-    :param days_breakdown_stats: Days breakdown metrics
-    :param stake_currency: Stakecurrency used
-    :return: pretty printed table with tabulate as string
-    """
     headers = [
         period.capitalize(),
         f'Tot Profit {stake_currency}',
@@ -647,23 +553,12 @@ def text_table_periodic_breakdown(days_breakdown_stats: List[Dict[str, Any]],
 
 
 def text_table_strategy(strategy_results, stake_currency: str) -> str:
-    """
-    Generate summary table per strategy
-    :param strategy_results: Dict of <Strategyname: DataFrame> containing results for all strategies
-    :param stake_currency: stake-currency - used to correctly name headers
-    :return: pretty printed table with tabulate as string
-    """
     floatfmt = _get_line_floatfmt(stake_currency)
     headers = _get_line_header('Strategy', stake_currency)
-    # _get_line_header() is also used for per-pair summary. Per-pair drawdown is mostly useless
-    # therefore we slip this column in only for strategy summary here.
     headers.append('Drawdown')
-
-    # Align drawdown string on the center two space separator.
     if 'max_drawdown_account' in strategy_results[0]:
         drawdown = [f'{t["max_drawdown_account"] * 100:.2f}' for t in strategy_results]
     else:
-        # Support for prior backtest results
         drawdown = [f'{t["max_drawdown_per"]:.2f}' for t in strategy_results]
 
     dd_pad_abs = max([len(t['max_drawdown_abs']) for t in strategy_results])
@@ -676,7 +571,6 @@ def text_table_strategy(strategy_results, stake_currency: str) -> str:
         t['profit_total_pct'], t['duration_avg'],
         _generate_wins_draws_losses(t['wins'], t['draws'], t['losses']), drawdown]
         for t, drawdown in zip(strategy_results, drawdown)]
-    # Ignore type as floatfmt does allow tuples but mypy does not know that
     return tabulate(output, headers=headers,
                     floatfmt=floatfmt, tablefmt="orgtbl", stralign="right")
 
@@ -686,14 +580,11 @@ def text_table_add_metrics(strat_results: Dict) -> str:
         best_trade = max(strat_results['trades'], key=lambda x: x['profit_ratio'])
         worst_trade = min(strat_results['trades'], key=lambda x: x['profit_ratio'])
 
-        # Newly added fields should be ignored if they are missing in strat_results. hyperopt-show
-        # command stores these results and newer version of freqtrade must be able to handle old
-        # results with missing new fields.
         metrics = [
             ('Backtesting from', strat_results['backtest_start']),
             ('Backtesting to', strat_results['backtest_end']),
             ('Max open trades', strat_results['max_open_trades']),
-            ('', ''),  # Empty line to improve readability
+            ('', ''),
             ('Total/Daily Avg Trades',
                 f"{strat_results['total_trades']} / {strat_results['trades_per_day']}"),
             ('Starting balance', round_coin_value(strat_results['starting_balance'],
@@ -710,7 +601,7 @@ def text_table_add_metrics(strat_results: Dict) -> str:
                                                    strat_results['stake_currency'])),
             ('Total trade volume', round_coin_value(strat_results['total_volume'],
                                                     strat_results['stake_currency'])),
-            ('', ''),  # Empty line to improve readability
+            ('', ''),
             ('Best Pair', f"{strat_results['best_pair']['key']} "
                           f"{strat_results['best_pair']['profit_sum']:.2%}"),
             ('Worst Pair', f"{strat_results['worst_pair']['key']} "
@@ -731,14 +622,13 @@ def text_table_add_metrics(strat_results: Dict) -> str:
             ('Entry/Exit Timeouts',
              f"{strat_results.get('timedout_entry_orders', 'N/A')} / "
              f"{strat_results.get('timedout_exit_orders', 'N/A')}"),
-            ('', ''),  # Empty line to improve readability
+            ('', ''),
 
             ('Min balance', round_coin_value(strat_results['csum_min'],
                                              strat_results['stake_currency'])),
             ('Max balance', round_coin_value(strat_results['csum_max'],
                                              strat_results['stake_currency'])),
 
-            # Compatibility to show old hyperopt results
             ('Drawdown (Account)', f"{strat_results['max_drawdown_account']:.2%}")
             if 'max_drawdown_account' in strat_results else (
                 'Drawdown', f"{strat_results['max_drawdown']:.2%}"),
@@ -770,10 +660,6 @@ def text_table_add_metrics(strat_results: Dict) -> str:
 
 def show_backtest_result(strategy: str, results: Dict[str, Any], stake_currency: str,
                          backtest_breakdown=[]):
-    """
-    Print results for one strategy
-    """
-    # Print results
     print(f"Result for strategy {strategy}")
     table = text_table_bt_results(results['results_per_pair'], stake_currency=stake_currency)
     if isinstance(table, str):
@@ -830,7 +716,6 @@ def show_backtest_results(config: Dict, backtest_stats: Dict):
             config.get('backtest_breakdown', []))
 
     if len(backtest_stats['strategy']) > 1:
-        # Print Strategy summary table
 
         table = text_table_strategy(backtest_stats['strategy_comparison'], stake_currency)
         print(f"{results['backtest_start']} -> {results['backtest_end']} |"

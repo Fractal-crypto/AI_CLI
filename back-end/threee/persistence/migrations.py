@@ -155,7 +155,7 @@ def migrate_orders_table(engine, table_back_name: str, cols_order: List):
 
     ft_fee_base = get_column_def(cols_order, 'ft_fee_base', 'null')
 
-    # let SQLAlchemy create the schema as required
+
     with engine.begin() as connection:
         connection.execute(text(f"""
             insert into orders ( id, ft_trade_id, ft_order_side, ft_pair, ft_is_open, order_id,
