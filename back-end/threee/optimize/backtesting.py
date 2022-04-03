@@ -110,6 +110,7 @@ class Backtesting:
         Trade.use_db = True
 
     def init_backtest_detail(self):
+        # 각 타임프레임 데이터 
         self.timeframe_detail = str(self.config.get('timeframe_detail', ''))
         if self.timeframe_detail:
             self.timeframe_detail_min = timeframe_to_minutes(self.timeframe_detail)
