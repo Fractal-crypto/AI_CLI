@@ -1,7 +1,7 @@
 # pragma pylint: disable=missing-docstring, W0212, too-many-arguments
 
 """
-This module contains the backtesting logic
+This module contains the backtesting logica
 """
 import logging
 from collections import defaultdict
